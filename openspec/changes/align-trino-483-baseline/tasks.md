@@ -14,6 +14,6 @@
 
 ## 3. 验证
 
-- [ ] 3.1 远端 Maven 容器执行后端 `mvn test` 全绿
-- [ ] 3.2 重建部署并跑全栈 E2E `smoke_test.py` 得到 `E2E_OK`
-- [ ] 3.3 确认跨源查询与动态 Catalog 在 483 行为一致
+- [x] 3.1 远端 Maven 容器执行后端 `mvn test` 全绿
+- [x] 3.2 重建部署并跑全栈 E2E `smoke_test.py` 得到 `E2E_OK`
+- [x] 3.3 确认跨源查询与动态 Catalog 在 483 行为一致
