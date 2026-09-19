@@ -1,0 +1,3 @@
+schema: spec-driven
+created: 2026-09-19
+goal: 将本仓库源码基线从 484-SNAPSHOT 迁移到 Trino 483 正式版，与运行时/后端/连接器版本严格对齐

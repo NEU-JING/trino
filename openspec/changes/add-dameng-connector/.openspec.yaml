@@ -1,0 +1,3 @@
+schema: spec-driven
+created: 2026-09-19
+goal: 自研 trino-dameng 插件连接器并接入真实达梦 5236，跨 4 源联邦查询

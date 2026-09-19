@@ -1,0 +1,70 @@
+name: data-fabric
+
+# PostgreSQL app-support (pg-latest) and Greenplum-sim (postgres94) are pre-existing
+# containers, already attached to the external `data-fabric-net` network.
+# Compose manages Trino, MySQL (OceanBase sim) and the platform backend.
+#
+# NOTE: the Trino image's purpose-built jvm.config is intentionally NOT overridden.
+
+services:
+  trino:
+    image: trinodb/trino:latest
+    container_name: data-fabric-trino
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./trino/config.properties:/etc/trino/config.properties:ro
+      - ./trino/node.properties:/etc/trino/node.properties:ro
+      - ./trino/catalog-store.properties:/etc/trino/catalog-store.properties:ro
+      - ./trino/access-control.properties:/etc/trino/access-control.properties:ro
+      - ./trino/catalog:/etc/trino/catalog
+    networks:
+      - data-fabric-net
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    image: data-fabric-backend:latest
+    container_name: data-fabric-backend
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      APP_DB_URL: jdbc:postgresql://${APP_DB_HOST}:${APP_DB_PORT}/${APP_DB_NAME}
+      APP_DB_USER: ${APP_DB_USER}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+      TRINO_URL: http://trino:8080
+      TRINO_SERVICE_USER: ${TRINO_SERVICE_USER:-trino_service}
+      BOOTSTRAP_OPERATOR_USER: ${BOOTSTRAP_OPERATOR_USER:-admin}
+      BOOTSTRAP_OPERATOR_PASSWORD: ${BOOTSTRAP_OPERATOR_PASSWORD:-admin}
+      BOOTSTRAP_QUERY_USER: ${BOOTSTRAP_QUERY_USER:-viewer}
+      BOOTSTRAP_QUERY_PASSWORD: ${BOOTSTRAP_QUERY_PASSWORD:-viewer}
+    networks:
+      - data-fabric-net
+    depends_on:
+      - trino
+
+  mysql:
+    image: mysql:8.4
+    container_name: data-fabric-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - data-fabric-net
+
+networks:
+  data-fabric-net:
+    external: true
+
+volumes:
+  mysql-data:
