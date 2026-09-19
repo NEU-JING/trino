@@ -1,7 +1,8 @@
+import { App as AntdApp, Button, Card, Col, Empty, Form, Input, Popconfirm, Row, Select, Table, Tag } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useState } from "react";
 import * as api from "./api";
 import type { PermissionView, UserView } from "./api";
-import { cell, input } from "./styles";
 
 const empty: PermissionView = {
   principal: "",
@@ -13,19 +14,22 @@ const empty: PermissionView = {
 };
 
 export default function PermissionsPage() {
+  const { message } = AntdApp.useApp();
+  const [form] = Form.useForm<PermissionView>();
   const [permissions, setPermissions] = useState<PermissionView[]>([]);
   const [users, setUsers] = useState<UserView[]>([]);
-  const [form, setForm] = useState<PermissionView>(empty);
-  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
+    setLoading(true);
     try {
       setPermissions(await api.listPermissions());
-      setError("");
     } catch (e) {
-      setError(String(e));
+      message.error("加载授权失败：" + String(e));
+    } finally {
+      setLoading(false);
     }
-  }, []);
+  }, [message]);
 
   useEffect(() => {
     void refresh();
@@ -35,99 +39,104 @@ export default function PermissionsPage() {
       .catch(() => undefined);
   }, [refresh]);
 
-  async function onGrant() {
+  async function onGrant(values: PermissionView) {
     try {
-      await api.grantPermission(form);
-      setForm(empty);
+      await api.grantPermission(values);
+      message.success("授权成功");
+      form.resetFields();
       await refresh();
     } catch (e) {
-      setError(String(e));
+      message.error(String(e));
     }
   }
 
   async function onRevoke(permission: PermissionView) {
     try {
       await api.revokePermission(permission);
+      message.success("已回收授权");
       await refresh();
     } catch (e) {
-      setError(String(e));
+      message.error(String(e));
     }
   }
 
-  return (
-    <section>
-      {error && <p style={{ color: "crimson" }}>{error}</p>}
-      <h2>权限管理</h2>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr>
-            <th style={cell}>主体</th>
-            <th style={cell}>类型</th>
-            <th style={cell}>表</th>
-            <th style={cell}>权限</th>
-            <th style={cell}>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          {permissions.map((permission, index) => (
-            <tr key={`${permission.principal}-${permission.catalog}-${permission.schema}-${permission.table}-${index}`}>
-              <td style={cell}>{permission.principal}</td>
-              <td style={cell}>{permission.principalType}</td>
-              <td style={cell}>
-                {permission.catalog}.{permission.schema}.{permission.table}
-              </td>
-              <td style={cell}>{permission.permission}</td>
-              <td style={cell}>
-                <button onClick={() => onRevoke(permission)}>回收</button>
-              </td>
-            </tr>
-          ))}
-          {permissions.length === 0 && (
-            <tr>
-              <td style={cell} colSpan={5}>
-                暂无授权
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+  const columns: ColumnsType<PermissionView> = [
+    { title: "主体", dataIndex: "principal" },
+    { title: "类型", dataIndex: "principalType", width: 100, render: (value: string) => <Tag>{value}</Tag> },
+    {
+      title: "表",
+      render: (_, record) => <Tag>{`${record.catalog}.${record.schema}.${record.table}`}</Tag>,
+    },
+    { title: "权限", dataIndex: "permission", width: 120, render: (value: string) => <Tag color="geekblue">{value}</Tag> },
+    {
+      title: "操作",
+      width: 100,
+      render: (_, record) => (
+        <Popconfirm title="确认回收该授权？" onConfirm={() => onRevoke(record)} okText="回收" cancelText="取消">
+          <Button type="link" size="small" danger>
+            回收
+          </Button>
+        </Popconfirm>
+      ),
+    },
+  ];
 
-      <h2 style={{ marginTop: 24 }}>授予表权限</h2>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, maxWidth: 720 }}>
-        <select
-          style={input}
-          value={form.principal}
-          onChange={(e) => setForm({ ...form, principal: e.target.value })}
-        >
-          <option value="">选择用户</option>
-          {users.map((user) => (
-            <option key={user.username} value={user.username}>
-              {user.username}（{user.role}）
-            </option>
-          ))}
-        </select>
-        <select
-          style={input}
-          value={form.principalType}
-          onChange={(e) => setForm({ ...form, principalType: e.target.value })}
-        >
-          <option value="USER">USER</option>
-          <option value="ROLE">ROLE</option>
-        </select>
-        <input style={input} placeholder="catalog" value={form.catalog} onChange={(e) => setForm({ ...form, catalog: e.target.value })} />
-        <input style={input} placeholder="schema" value={form.schema} onChange={(e) => setForm({ ...form, schema: e.target.value })} />
-        <input style={input} placeholder="table" value={form.table} onChange={(e) => setForm({ ...form, table: e.target.value })} />
-        <select
-          style={input}
-          value={form.permission}
-          onChange={(e) => setForm({ ...form, permission: e.target.value })}
-        >
-          <option value="SELECT">SELECT</option>
-        </select>
-      </div>
-      <div style={{ marginTop: 8 }}>
-        <button onClick={onGrant}>授权</button>
-      </div>
-    </section>
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <Card className="df-glass" variant="borderless" title="权限管理">
+        <Table<PermissionView>
+          rowKey={(record) => `${record.principal}-${record.catalog}-${record.schema}-${record.table}-${record.permission}`}
+          loading={loading}
+          columns={columns}
+          dataSource={permissions}
+          pagination={{ pageSize: 10, hideOnSinglePage: true }}
+          locale={{ emptyText: <Empty description="暂无授权" /> }}
+        />
+      </Card>
+
+      <Card className="df-glass" variant="borderless" title="授予表权限">
+        <Form form={form} layout="vertical" initialValues={empty} onFinish={onGrant} requiredMark={false}>
+          <Row gutter={16}>
+            <Col xs={24} md={8}>
+              <Form.Item name="principal" label="主体" rules={[{ required: true, message: "请选择用户" }]}>
+                <Select
+                  placeholder="选择用户"
+                  options={users.map((user) => ({
+                    value: user.username,
+                    label: `${user.username}（${user.role}）`,
+                  }))}
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={4}>
+              <Form.Item name="principalType" label="类型" rules={[{ required: true }]}>
+                <Select options={[{ value: "USER", label: "USER" }, { value: "ROLE", label: "ROLE" }]} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={4}>
+              <Form.Item name="catalog" label="catalog" rules={[{ required: true, message: "必填" }]}>
+                <Input placeholder="catalog" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={4}>
+              <Form.Item name="schema" label="schema" rules={[{ required: true, message: "必填" }]}>
+                <Input placeholder="schema" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={4}>
+              <Form.Item name="table" label="table" rules={[{ required: true, message: "必填" }]}>
+                <Input placeholder="table" />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Form.Item name="permission" label="权限" rules={[{ required: true }]}>
+            <Select style={{ width: 160 }} options={[{ value: "SELECT", label: "SELECT" }]} />
+          </Form.Item>
+          <Button type="primary" htmlType="submit">
+            授权
+          </Button>
+        </Form>
+      </Card>
+    </div>
   );
 }

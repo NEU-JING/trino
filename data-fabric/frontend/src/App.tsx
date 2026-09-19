@@ -1,111 +1,116 @@
-import { useState } from "react";
+import { LockOutlined, UserOutlined } from "@ant-design/icons";
+import { Alert, Button, Card, Form, Input, Typography, App as AntdApp } from "antd";
+import { lazy, useState } from "react";
+import { Navigate, Route, Routes } from "react-router-dom";
 import * as api from "./api";
-import DataSourcesPage from "./DataSourcesPage";
-import PermissionsPage from "./PermissionsPage";
-import QueryPage from "./QueryPage";
-import TablesPage from "./TablesPage";
-import { input } from "./styles";
+import AppShell from "./components/AppShell";
+import BrandBanner from "./components/BrandBanner";
 
-type View = "query" | "tables" | "data-sources" | "permissions";
+const DashboardPage = lazy(() => import("./DashboardPage"));
+const DataSourcesPage = lazy(() => import("./DataSourcesPage"));
+const PermissionsPage = lazy(() => import("./PermissionsPage"));
+const QueryPage = lazy(() => import("./QueryPage"));
+const TablesPage = lazy(() => import("./TablesPage"));
+
+interface Session {
+  token: string;
+  username: string;
+  role: string;
+}
 
 export default function App() {
-  const [token, setToken] = useState<string | null>(null);
-  const [username, setUsername] = useState("");
-  const [role, setRole] = useState("");
-  const [view, setView] = useState<View>("tables");
-  const [error, setError] = useState("");
+  const [session, setSession] = useState<Session | null>(null);
 
-  async function onLogin(usernameValue: string, password: string) {
-    try {
-      const result = await api.login(usernameValue, password);
-      api.setToken(result.token);
-      setToken(result.token);
-      setUsername(result.username);
-      setRole(result.role);
-      setError("");
-    } catch (e) {
-      setError(String(e));
-    }
+  async function onLogin(username: string, password: string) {
+    const result = await api.login(username, password);
+    api.setToken(result.token);
+    setSession({ token: result.token, username: result.username, role: result.role });
   }
 
   function logout() {
     api.setToken(null);
-    setToken(null);
-    setUsername("");
-    setRole("");
+    setSession(null);
   }
 
-  if (!token) {
-    return <LoginForm onLogin={onLogin} error={error} />;
+  if (!session) {
+    return <LoginPage onLogin={onLogin} />;
   }
 
-  const isOperator = role === "OPERATOR";
+  const isOperator = session.role === "OPERATOR";
 
   return (
-    <main style={{ fontFamily: "sans-serif", padding: 24, maxWidth: 1100, margin: "0 auto" }}>
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1>数据编织平台</h1>
-        <div>
-          {username}（{role}）
-          <button onClick={logout} style={{ marginLeft: 8 }}>
-            退出
-          </button>
-        </div>
-      </header>
-
-      <nav style={{ marginBottom: 16 }}>
-        <button
-          onClick={() => setView("query")}
-          disabled={view === "query"}
-          style={{ marginRight: 8 }}
-        >
-          SQL 查询
-        </button>
-        <button
-          onClick={() => setView("tables")}
-          disabled={view === "tables"}
-          style={{ marginRight: 8 }}
-        >
-          表目录
-        </button>
-        {isOperator && (
-          <button onClick={() => setView("data-sources")} disabled={view === "data-sources"} style={{ marginRight: 8 }}>
-            数据源管理
-          </button>
-        )}
-        {isOperator && (
-          <button onClick={() => setView("permissions")} disabled={view === "permissions"}>
-            权限管理
-          </button>
-        )}
-      </nav>
-
-      {view === "query" && <QueryPage />}
-      {view === "tables" && <TablesPage isOperator={isOperator} />}
-      {view === "data-sources" && <DataSourcesPage isOperator={isOperator} />}
-      {view === "permissions" && <PermissionsPage />}
-    </main>
+    <Routes>
+      <Route element={<AppShell username={session.username} role={session.role} onLogout={logout} />}>
+        <Route index element={<DashboardPage isOperator={isOperator} />} />
+        <Route path="query" element={<QueryPage />} />
+        <Route path="tables" element={<TablesPage isOperator={isOperator} />} />
+        <Route
+          path="data-sources"
+          element={isOperator ? <DataSourcesPage /> : <Navigate to="/" replace />}
+        />
+        <Route
+          path="permissions"
+          element={isOperator ? <PermissionsPage /> : <Navigate to="/" replace />}
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Route>
+    </Routes>
   );
 }
 
-function LoginForm({ onLogin, error }: { onLogin: (username: string, password: string) => void; error: string }) {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+function LoginPage({ onLogin }: { onLogin: (username: string, password: string) => Promise<void> }) {
+  const { message } = AntdApp.useApp();
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(values: { username: string; password: string }) {
+    setSubmitting(true);
+    setError("");
+    try {
+      await onLogin(values.username, values.password);
+    } catch (e) {
+      const text = e instanceof Error ? e.message : String(e);
+      setError(text);
+      message.error("登录失败：" + text);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
-    <main style={{ fontFamily: "sans-serif", padding: 48, maxWidth: 320, margin: "0 auto" }}>
-      <h1>数据编织平台</h1>
-      {error && <p style={{ color: "crimson" }}>{error}</p>}
-      <input style={input} placeholder="用户名" value={username} onChange={(e) => setUsername(e.target.value)} />
-      <input
-        style={{ ...input, marginTop: 8 }}
-        type="password"
-        placeholder="密码"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
-      <button style={{ marginTop: 8 }} onClick={() => onLogin(username, password)}>
-        登录
-      </button>
-    </main>
+    <div
+      className="df-grid"
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 24,
+        position: "relative",
+      }}
+    >
+      <Card className="df-glass" variant="borderless" style={{ width: 400, borderRadius: 18, position: "relative", zIndex: 1 }}>
+        <div style={{ textAlign: "center", marginBottom: 24 }}>
+          <BrandBanner />
+        </div>
+        {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
+        <Form layout="vertical" onFinish={submit} requiredMark={false} initialValues={{ username: "", password: "" }}>
+          <Form.Item name="username" rules={[{ required: true, message: "请输入用户名" }]}>
+            <Input size="large" prefix={<UserOutlined />} placeholder="用户名" autoComplete="username" />
+          </Form.Item>
+          <Form.Item name="password" rules={[{ required: true, message: "请输入密码" }]}>
+            <Input.Password size="large" prefix={<LockOutlined />} placeholder="密码" autoComplete="current-password" />
+          </Form.Item>
+          <Form.Item style={{ marginBottom: 0 }}>
+            <Button type="primary" size="large" htmlType="submit" block loading={submitting}>
+              登录
+            </Button>
+          </Form.Item>
+        </Form>
+        <Typography.Paragraph type="secondary" style={{ textAlign: "center", marginTop: 16, marginBottom: 0, fontSize: 12 }}>
+          原型账号：admin / admin · viewer / viewer
+        </Typography.Paragraph>
+      </Card>
+    </div>
   );
 }

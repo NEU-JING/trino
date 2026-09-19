@@ -5,6 +5,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -90,6 +92,35 @@ public class QueryService
             handle.cancel();
         }
         return execution.view();
+    }
+
+    public long count()
+    {
+        return executions.size();
+    }
+
+    public long countOwnedBy(String owner)
+    {
+        return executions.values().stream().filter(execution -> execution.owner().equals(owner)).count();
+    }
+
+    public List<QueryHistoryView> recent(int limit)
+    {
+        return executions.values().stream()
+                .map(QueryExecution::historyView)
+                .sorted(Comparator.comparing(QueryHistoryView::startedAt).reversed())
+                .limit(limit)
+                .toList();
+    }
+
+    public List<QueryHistoryView> recentOwnedBy(String owner, int limit)
+    {
+        return executions.values().stream()
+                .filter(execution -> execution.owner().equals(owner))
+                .map(QueryExecution::historyView)
+                .sorted(Comparator.comparing(QueryHistoryView::startedAt).reversed())
+                .limit(limit)
+                .toList();
     }
 
     private QueryExecution requireOwned(String user, String queryId)

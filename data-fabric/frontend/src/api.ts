@@ -77,6 +77,50 @@ export interface QueryExecutionView {
   finishedAt: string | null;
 }
 
+export interface DataSourceHealthView {
+  name: string;
+  businessType: string;
+  enabled: boolean;
+}
+
+export interface QueryHistoryView {
+  queryId: string;
+  user: string;
+  sql: string;
+  state: string;
+  startedAt: string;
+  finishedAt: string | null;
+}
+
+export interface OverviewStatsView {
+  dataSourceCount: number;
+  enabledDataSourceCount: number;
+  registeredTableCount: number;
+  userCount: number;
+  queryCount: number;
+  dataSourceHealth: DataSourceHealthView[];
+  recentQueries: QueryHistoryView[];
+}
+
+export interface TopologyNode {
+  id: string;
+  label: string;
+  type: string;
+  enabled: boolean | null;
+  role: string | null;
+}
+
+export interface TopologyEdge {
+  source: string;
+  target: string;
+  type: string;
+}
+
+export interface TopologyView {
+  nodes: TopologyNode[];
+  edges: TopologyEdge[];
+}
+
 let token: string | null = null;
 
 export function setToken(value: string | null): void {
@@ -169,6 +213,14 @@ export function revokePermission(permission: PermissionView): Promise<void> {
 
 export function listUsers(): Promise<UserView[]> {
   return request<UserView[]>("/api/admin/users");
+}
+
+export function getOverviewStats(): Promise<OverviewStatsView> {
+  return request<OverviewStatsView>("/api/overview/stats");
+}
+
+export function getTopology(): Promise<TopologyView> {
+  return request<TopologyView>("/api/overview/topology");
 }
 
 export function startQuery(sql: string): Promise<QueryExecutionView> {

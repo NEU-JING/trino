@@ -1,13 +1,22 @@
+import { DownloadOutlined, PlayCircleOutlined, StopOutlined } from "@ant-design/icons";
+import { Alert, App as AntdApp, Button, Card, Empty, Input, Space, Table, Tag } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import { useEffect, useRef, useState } from "react";
 import * as api from "./api";
 import type { QueryExecutionView } from "./api";
-import { cell } from "./styles";
+
+const STATE_COLOR: Record<string, string> = {
+  FINISHED: "green",
+  RUNNING: "blue",
+  FAILED: "red",
+  CANCELED: "default",
+};
 
 export default function QueryPage() {
+  const { message } = AntdApp.useApp();
   const [sql, setSql] = useState("SELECT 1");
   const [view, setView] = useState<QueryExecutionView | null>(null);
   const [running, setRunning] = useState(false);
-  const [error, setError] = useState("");
   const pollRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -29,9 +38,12 @@ export default function QueryPage() {
         if (current.state !== "RUNNING") {
           stopPolling();
           setRunning(false);
+          if (current.state === "FAILED") {
+            message.error("查询失败");
+          }
         }
       } catch (e) {
-        setError(String(e));
+        message.error(String(e));
         stopPolling();
         setRunning(false);
       }
@@ -39,7 +51,6 @@ export default function QueryPage() {
   }
 
   async function onRun() {
-    setError("");
     setView(null);
     setRunning(true);
     try {
@@ -47,7 +58,7 @@ export default function QueryPage() {
       setView(started);
       poll(started.queryId);
     } catch (e) {
-      setError(String(e));
+      message.error(String(e));
       setRunning(false);
     }
   }
@@ -58,8 +69,9 @@ export default function QueryPage() {
     }
     try {
       setView(await api.cancelQuery(view.queryId));
+      message.info("查询已取消");
     } catch (e) {
-      setError(String(e));
+      message.error(String(e));
     }
     stopPolling();
     setRunning(false);
@@ -71,77 +83,79 @@ export default function QueryPage() {
     }
     try {
       await api.downloadExport(view.queryId, format);
-      setError("");
+      message.success("导出已开始");
     } catch (e) {
-      setError(String(e));
+      message.error(String(e));
     }
   }
 
+  const columns: ColumnsType<Record<string, unknown>> = (view?.columns ?? []).map((column, index) => ({
+    title: column,
+    dataIndex: "c" + index,
+    render: (value: unknown) => (value === null || value === undefined ? "" : String(value)),
+  }));
+
+  const dataSource = (view?.rows ?? []).map((row, rowIndex) => {
+    const record: Record<string, unknown> = { key: rowIndex };
+    row.forEach((value, columnIndex) => {
+      record["c" + columnIndex] = value;
+    });
+    return record;
+  });
+
   return (
-    <section>
-      {error && <p style={{ color: "crimson" }}>{error}</p>}
-      <h2>SQL 查询</h2>
-      <textarea
-        style={{ width: "100%", height: 140, fontFamily: "monospace", fontSize: 14, padding: 8 }}
-        value={sql}
-        onChange={(e) => setSql(e.target.value)}
-      />
-      <div style={{ marginTop: 8 }}>
-        <button onClick={onRun} disabled={running}>
-          执行
-        </button>
-        <button onClick={onCancel} disabled={!running} style={{ marginLeft: 8 }}>
-          取消
-        </button>
-        {view && <span style={{ marginLeft: 12 }}>状态：{view.state}</span>}
-        {view?.state === "FINISHED" && (
-          <>
-            <button style={{ marginLeft: 12 }} onClick={() => onExport("csv")}>
-              导出 CSV
-            </button>
-            <button style={{ marginLeft: 8 }} onClick={() => onExport("xlsx")}>
-              导出 Excel
-            </button>
-          </>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <Card
+        className="df-glass"
+        variant="borderless"
+        title="SQL 查询"
+        extra={view && <Tag color={STATE_COLOR[view.state] ?? "default"}>状态：{view.state}</Tag>}
+      >
+        <Input.TextArea
+          value={sql}
+          onChange={(e) => setSql(e.target.value)}
+          autoSize={{ minRows: 5, maxRows: 10 }}
+          style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 14 }}
+          placeholder="输入 SQL，例如 SELECT * FROM oceanbase.ob_source.orders"
+        />
+        <Space style={{ marginTop: 12 }} wrap>
+          <Button type="primary" icon={<PlayCircleOutlined />} onClick={onRun} loading={running}>
+            执行
+          </Button>
+          <Button icon={<StopOutlined />} onClick={onCancel} disabled={!running}>
+            取消
+          </Button>
+          {view?.state === "FINISHED" && (
+            <>
+              <Button icon={<DownloadOutlined />} onClick={() => onExport("csv")}>
+                导出 CSV
+              </Button>
+              <Button icon={<DownloadOutlined />} onClick={() => onExport("xlsx")}>
+                导出 Excel
+              </Button>
+            </>
+          )}
+        </Space>
+
+        {view?.error && <Alert type="error" showIcon message={view.error} style={{ marginTop: 12 }} />}
+        {view?.truncated && (
+          <Alert type="warning" showIcon message="结果已截断，仅显示前部分行。" style={{ marginTop: 12 }} />
         )}
-      </div>
 
-      {view?.error && <p style={{ color: "crimson" }}>{view.error}</p>}
-      {view?.truncated && <p style={{ color: "#b8860b" }}>结果已截断，仅显示前部分行。</p>}
-
-      {view && view.columns.length > 0 && (
-        <div style={{ overflowX: "auto", marginTop: 12 }}>
-          <table style={{ borderCollapse: "collapse", width: "100%" }}>
-            <thead>
-              <tr>
-                {view.columns.map((column) => (
-                  <th key={column} style={{ ...cell, background: "#f5f5f5" }}>
-                    {column}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {view.rows.map((row, rowIndex) => (
-                <tr key={rowIndex}>
-                  {row.map((value, columnIndex) => (
-                    <td key={columnIndex} style={cell}>
-                      {value === null ? "" : String(value)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-              {view.rows.length === 0 && (
-                <tr>
-                  <td style={cell} colSpan={view.columns.length}>
-                    （无数据）
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
+        {view && (
+          <div style={{ marginTop: 16 }}>
+            <Table<Record<string, unknown>>
+              size="small"
+              rowKey="key"
+              columns={columns}
+              dataSource={dataSource}
+              scroll={{ x: "max-content" }}
+              pagination={{ pageSize: 20, hideOnSinglePage: true }}
+              locale={{ emptyText: <Empty description="（无数据）" /> }}
+            />
+          </div>
+        )}
+      </Card>
+    </div>
   );
 }

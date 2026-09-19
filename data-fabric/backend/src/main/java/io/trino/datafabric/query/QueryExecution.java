@@ -88,4 +88,9 @@ public class QueryExecution
         return new QueryExecutionView(
                 queryId, state.name(), columns, rows, truncated, error, startedAt, finishedAt);
     }
+
+    public synchronized QueryHistoryView historyView()
+    {
+        return new QueryHistoryView(queryId, owner, sql, state.name(), startedAt, finishedAt);
+    }
 }

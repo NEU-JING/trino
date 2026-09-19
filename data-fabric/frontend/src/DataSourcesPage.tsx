@@ -1,7 +1,9 @@
+import { PlusOutlined, ReloadOutlined } from "@ant-design/icons";
+import { App as AntdApp, Button, Card, Col, Empty, Form, Input, InputNumber, Popconfirm, Row, Select, Space, Table, Tag, Typography } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useState } from "react";
 import * as api from "./api";
 import type { DataSourceRequest, DataSourceView } from "./api";
-import { cell, input } from "./styles";
 
 const BUSINESS_TYPES = ["OceanBase", "Greenplum"];
 
@@ -15,52 +17,58 @@ const emptyForm: DataSourceRequest = {
   password: "",
 };
 
-export default function DataSourcesPage({ isOperator }: { isOperator: boolean }) {
+export default function DataSourcesPage({ isOperator = true }: { isOperator?: boolean }) {
+  const { message } = AntdApp.useApp();
+  const [form] = Form.useForm<DataSourceRequest>();
   const [dataSources, setDataSources] = useState<DataSourceView[]>([]);
-  const [form, setForm] = useState<DataSourceRequest>(emptyForm);
+  const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [error, setError] = useState("");
 
   const refresh = useCallback(async () => {
+    setLoading(true);
     try {
       setDataSources(await api.listDataSources());
-      setError("");
     } catch (e) {
-      setError(String(e));
+      message.error("加载数据源失败：" + String(e));
+    } finally {
+      setLoading(false);
     }
-  }, []);
+  }, [message]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
-  async function onSubmit() {
+  async function onSubmit(values: DataSourceRequest) {
     try {
       if (editingId === null) {
-        await api.createDataSource(form);
+        await api.createDataSource(values);
+        message.success("数据源已注册");
       } else {
-        await api.updateDataSource(editingId, form);
+        await api.updateDataSource(editingId, values);
+        message.success("数据源已更新");
       }
-      setForm(emptyForm);
       setEditingId(null);
+      form.resetFields();
       await refresh();
     } catch (e) {
-      setError(String(e));
+      message.error(String(e));
     }
   }
 
   async function onDisable(id: number) {
     try {
       await api.disableDataSource(id);
+      message.success("数据源已停用");
       await refresh();
     } catch (e) {
-      setError(String(e));
+      message.error(String(e));
     }
   }
 
   function onEdit(dataSource: DataSourceView) {
     setEditingId(dataSource.id);
-    setForm({
+    form.setFieldsValue({
       name: dataSource.name,
       businessType: dataSource.businessType,
       host: dataSource.host,
@@ -71,115 +79,127 @@ export default function DataSourcesPage({ isOperator }: { isOperator: boolean })
     });
   }
 
+  function onCancelEdit() {
+    setEditingId(null);
+    form.resetFields();
+  }
+
+  const columns: ColumnsType<DataSourceView> = [
+    { title: "名称", dataIndex: "name" },
+    { title: "类型", dataIndex: "businessType", render: (value: string) => <Tag color="blue">{value}</Tag> },
+    {
+      title: "地址",
+      render: (_, record) => `${record.host}:${record.port}${record.database ? "/" + record.database : ""}`,
+    },
+    { title: "用户", dataIndex: "user" },
+    {
+      title: "状态",
+      dataIndex: "enabled",
+      render: (enabled: boolean) => <Tag color={enabled ? "green" : "default"}>{enabled ? "已启用" : "已停用"}</Tag>,
+    },
+    {
+      title: "操作",
+      width: 160,
+      render: (_, record) =>
+        isOperator && record.enabled ? (
+          <Space>
+            <Button type="link" size="small" onClick={() => onEdit(record)}>
+              编辑
+            </Button>
+            <Popconfirm title="确认停用该数据源？" onConfirm={() => onDisable(record.id)} okText="停用" cancelText="取消">
+              <Button type="link" size="small" danger>
+                停用
+              </Button>
+            </Popconfirm>
+          </Space>
+        ) : null,
+    },
+  ];
+
   return (
-    <section>
-      {error && <p style={{ color: "crimson" }}>{error}</p>}
-      <h2>数据源</h2>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr>
-            <th style={cell}>名称</th>
-            <th style={cell}>类型</th>
-            <th style={cell}>地址</th>
-            <th style={cell}>用户</th>
-            <th style={cell}>状态</th>
-            <th style={cell}>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          {dataSources.map((dataSource) => (
-            <tr key={dataSource.id}>
-              <td style={cell}>{dataSource.name}</td>
-              <td style={cell}>{dataSource.businessType}</td>
-              <td style={cell}>
-                {dataSource.host}:{dataSource.port}
-                {dataSource.database ? `/${dataSource.database}` : ""}
-              </td>
-              <td style={cell}>{dataSource.user}</td>
-              <td style={cell}>{dataSource.enabled ? "已启用" : "已停用"}</td>
-              <td style={cell}>
-                {isOperator && dataSource.enabled && (
-                  <>
-                    <button onClick={() => onEdit(dataSource)}>编辑</button>
-                    <button onClick={() => onDisable(dataSource.id)} style={{ marginLeft: 8 }}>
-                      停用
-                    </button>
-                  </>
-                )}
-              </td>
-            </tr>
-          ))}
-          {dataSources.length === 0 && (
-            <tr>
-              <td style={cell} colSpan={6}>
-                暂无数据源
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <Card
+        className="df-glass"
+        variant="borderless"
+        title="数据源"
+        extra={
+          <Button icon={<ReloadOutlined />} onClick={() => void refresh()}>
+            刷新
+          </Button>
+        }
+      >
+        <Table<DataSourceView>
+          rowKey="id"
+          loading={loading}
+          columns={columns}
+          dataSource={dataSources}
+          pagination={{ pageSize: 8, hideOnSinglePage: true }}
+          locale={{ emptyText: <Empty description="暂无数据源" /> }}
+        />
+      </Card>
 
       {isOperator && (
-        <>
-          <h2 style={{ marginTop: 24 }}>{editingId === null ? "新增数据源" : "编辑数据源"}</h2>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, maxWidth: 720 }}>
-            <input
-              style={input}
-              placeholder="名称 (小写标识)"
-              value={form.name}
-              disabled={editingId !== null}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-            />
-            <select
-              style={input}
-              value={form.businessType}
-              onChange={(e) => setForm({ ...form, businessType: e.target.value })}
-            >
-              {BUSINESS_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-            <input style={input} placeholder="主机" value={form.host} onChange={(e) => setForm({ ...form, host: e.target.value })} />
-            <input
-              style={input}
-              type="number"
-              placeholder="端口"
-              value={form.port}
-              onChange={(e) => setForm({ ...form, port: Number(e.target.value) })}
-            />
-            <input
-              style={input}
-              placeholder="数据库 (Greenplum 必填)"
-              value={form.database}
-              onChange={(e) => setForm({ ...form, database: e.target.value })}
-            />
-            <input style={input} placeholder="用户名" value={form.user} onChange={(e) => setForm({ ...form, user: e.target.value })} />
-            <input
-              style={input}
-              type="password"
-              placeholder="密码"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-            />
-          </div>
-          <div style={{ marginTop: 8 }}>
-            <button onClick={onSubmit}>{editingId === null ? "注册" : "保存"}</button>
-            {editingId !== null && (
-              <button
-                style={{ marginLeft: 8 }}
-                onClick={() => {
-                  setEditingId(null);
-                  setForm(emptyForm);
-                }}
-              >
-                取消
-              </button>
-            )}
-          </div>
-        </>
+        <Card className="df-glass" variant="borderless" title={editingId === null ? "新增数据源" : "编辑数据源"}>
+          <Form
+            form={form}
+            layout="vertical"
+            initialValues={emptyForm}
+            onFinish={onSubmit}
+            disabled={!isOperator}
+            requiredMark={false}
+          >
+            <Row gutter={16}>
+              <Col xs={24} md={8}>
+                <Form.Item name="name" label="名称" rules={[{ required: true, message: "请输入名称" }]}>
+                  <Input placeholder="小写标识，如 ob_demo" disabled={editingId !== null} />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={8}>
+                <Form.Item name="businessType" label="业务类型" rules={[{ required: true }]}>
+                  <Select
+                    options={BUSINESS_TYPES.map((type) => ({ value: type, label: type }))}
+                  />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={8}>
+                <Form.Item name="host" label="主机" rules={[{ required: true, message: "请输入主机" }]}>
+                  <Input placeholder="数据库主机" />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={8}>
+                <Form.Item name="port" label="端口" rules={[{ required: true, message: "请输入端口" }]}>
+                  <InputNumber min={1} max={65535} style={{ width: "100%" }} />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={8}>
+                <Form.Item name="database" label="数据库" tooltip="Greenplum 必填">
+                  <Input placeholder="Greenplum 必填" />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={8}>
+                <Form.Item name="user" label="用户名" rules={[{ required: true, message: "请输入用户名" }]}>
+                  <Input />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={8}>
+                <Form.Item name="password" label="密码">
+                  <Input.Password placeholder={editingId === null ? "" : "留空表示不修改"} />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Space>
+              <Button type="primary" htmlType="submit">
+                {editingId === null ? "注册" : "保存"}
+              </Button>
+              {editingId !== null && <Button onClick={onCancelEdit}>取消</Button>}
+            </Space>
+          </Form>
+        </Card>
       )}
-    </section>
+
+      {!isOperator && (
+        <Typography.Text type="secondary">仅运营管理员可管理数据源。</Typography.Text>
+      )}
+    </div>
   );
 }
