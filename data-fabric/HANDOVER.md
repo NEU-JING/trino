@@ -1,7 +1,10 @@
 # Data Fabric Prototype — 工作交接（断电/重启恢复用）
 
-> 更新时间：2026-09-18 ｜ 分支：`feature/build-data-fabric-prototype`（尚未 commit）
+> 更新时间：2026-09-18 ｜ 分支：`feature/data-fabric-on-483`
 > 进度：**59 / 59** tasks（Group 0–8 全部完成，见 `openspec/changes/build-data-fabric-prototype/tasks.md`）
+> Trino 基线：**483 正式版** — 引擎源码（根 `pom.xml`）、部署镜像（`trinodb/trino:483`）、
+> 后端 `io.trino:trino-client`（`trino.version=483`）三者一致；不再使用 `latest`。
+> 迁移见 `openspec/changes/align-trino-483-baseline/`。
 
 ---
 

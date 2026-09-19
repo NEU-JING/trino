@@ -8,7 +8,7 @@ name: data-fabric
 
 services:
   trino:
-    image: trinodb/trino:latest
+    image: trinodb/trino:483
     container_name: data-fabric-trino
     restart: unless-stopped
     ports:

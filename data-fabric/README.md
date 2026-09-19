@@ -17,6 +17,13 @@ Spring Boot backend ── StatementClient ──▶ Trino coordinator ──▶
 `data-fabric/` is an **independent project** and is intentionally not part of the Trino Maven
 reactor (`data-fabric/backend/pom.xml` uses `spring-boot-starter-parent`).
 
+## Version baseline
+
+All layers are pinned to **Trino 483** (released): the engine source tree (root `pom.xml`), the
+deployment image (`trinodb/trino:483` in `data-fabric/deploy/docker-compose.yml`), and the backend
+`io.trino:trino-client` (`trino.version` in `data-fabric/backend/pom.xml`). Any self-built connector
+must compile against the same 483 SPI. Do not use `latest` for the Trino image.
+
 ## Layout
 
 ```
