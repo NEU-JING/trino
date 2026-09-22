@@ -11,12 +11,21 @@
   },
   "dependencies": {
     "@ant-design/icons": "^5.5.1",
+    "@codemirror/autocomplete": "^6.18.4",
+    "@codemirror/commands": "^6.7.1",
+    "@codemirror/lang-sql": "^6.10.0",
+    "@codemirror/language": "^6.10.8",
+    "@codemirror/state": "^6.5.0",
+    "@codemirror/theme-one-dark": "^6.1.2",
+    "@codemirror/view": "^6.36.1",
     "antd": "^5.22.2",
+    "codemirror": "^6.0.1",
     "echarts": "^5.5.1",
     "echarts-for-react": "^3.0.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.28.0"
+    "react-router-dom": "^6.28.0",
+    "sql-formatter": "^15.8.2"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",

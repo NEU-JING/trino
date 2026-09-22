@@ -42,6 +42,11 @@ public class QueryExecution
         return sql;
     }
 
+    public Instant startedAt()
+    {
+        return startedAt;
+    }
+
     public synchronized void finish(QueryResult result)
     {
         if (state != QueryState.RUNNING) {

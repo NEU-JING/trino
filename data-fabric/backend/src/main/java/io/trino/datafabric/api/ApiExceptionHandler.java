@@ -7,7 +7,9 @@ import io.trino.datafabric.datasource.DataSourceException;
 import io.trino.datafabric.datasource.DataSourceNotFoundException;
 import io.trino.datafabric.datasource.DuplicateDataSourceException;
 import io.trino.datafabric.export.ResultNotExportableException;
+import io.trino.datafabric.metadata.MetadataQueryException;
 import io.trino.datafabric.query.QueryNotFoundException;
+import io.trino.datafabric.query.SavedQueryNotFoundException;
 import io.trino.datafabric.table.TableNotFoundException;
 import io.trino.datafabric.trino.TrinoQueryException;
 import org.springframework.http.HttpStatus;
@@ -76,6 +78,13 @@ public class ApiExceptionHandler
         return Map.of("error", exception.getMessage());
     }
 
+    @ExceptionHandler(MetadataQueryException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public Map<String, String> metadataQuery(MetadataQueryException exception)
+    {
+        return Map.of("error", exception.getMessage());
+    }
+
     @ExceptionHandler(TableNotFoundException.class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public Map<String, String> tableNotFound(TableNotFoundException exception)
@@ -86,6 +95,13 @@ public class ApiExceptionHandler
     @ExceptionHandler(QueryNotFoundException.class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public Map<String, String> queryNotFound(QueryNotFoundException exception)
+    {
+        return Map.of("error", exception.getMessage());
+    }
+
+    @ExceptionHandler(SavedQueryNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public Map<String, String> savedQueryNotFound(SavedQueryNotFoundException exception)
     {
         return Map.of("error", exception.getMessage());
     }

@@ -11,6 +11,7 @@ const DataSourcesPage = lazy(() => import("./DataSourcesPage"));
 const PermissionsPage = lazy(() => import("./PermissionsPage"));
 const QueryPage = lazy(() => import("./QueryPage"));
 const TablesPage = lazy(() => import("./TablesPage"));
+const UsersPage = lazy(() => import("./UsersPage"));
 
 interface Session {
   token: string;
@@ -52,6 +53,7 @@ export default function App() {
           path="permissions"
           element={isOperator ? <PermissionsPage /> : <Navigate to="/" replace />}
         />
+        <Route path="users" element={isOperator ? <UsersPage /> : <Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

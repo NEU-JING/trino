@@ -9,6 +9,8 @@ import io.trino.datafabric.user.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -60,7 +62,30 @@ public class UserAdminController
                 .body(new UserView(request.username(), role.name(), true));
     }
 
+    @PatchMapping("/{username}")
+    public UserView update(@PathVariable String username, @RequestBody UpdateUserRequest request)
+    {
+        User existing = userRepository.findByUsername(username)
+                .orElseThrow(() -> new IllegalArgumentException("Unknown user: " + username));
+        Role role = request.role() == null || request.role().isBlank() ? existing.role() : parseRole(request.role());
+        boolean enabled = request.enabled() == null ? existing.enabled() : request.enabled();
+        userRepository.save(new User(existing.username(), existing.passwordHash(), role, enabled));
+        return new UserView(existing.username(), role.name(), enabled);
+    }
+
+    private static Role parseRole(String value)
+    {
+        try {
+            return Role.valueOf(value.toUpperCase(Locale.ROOT));
+        }
+        catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Unknown role: " + value);
+        }
+    }
+
     public record CreateUserRequest(String username, String password, String role) {}
+
+    public record UpdateUserRequest(String role, Boolean enabled) {}
 
     public record UserView(String username, String role, boolean enabled) {}
 }

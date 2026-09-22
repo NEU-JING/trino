@@ -1,8 +1,9 @@
 import { App as AntdApp, Button, Card, Empty, Input, Popconfirm, Select, Space, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type Key } from "react";
 import * as api from "./api";
 import type { DataSourceView, DiscoveredTable, RegisteredTableView } from "./api";
+import TableDetailDrawer from "./components/TableDetailDrawer";
 
 export default function TablesPage({ isOperator }: { isOperator: boolean }) {
   const { message } = AntdApp.useApp();
@@ -15,6 +16,11 @@ export default function TablesPage({ isOperator }: { isOperator: boolean }) {
   const [discovered, setDiscovered] = useState<DiscoveredTable[]>([]);
   const [descriptions, setDescriptions] = useState<Record<string, string>>({});
   const [discovering, setDiscovering] = useState(false);
+  const [schemaFilter, setSchemaFilter] = useState<string | undefined>(undefined);
+  const [selectedKeys, setSelectedKeys] = useState<Key[]>([]);
+  const [descriptionTemplate, setDescriptionTemplate] = useState("{table} 业务表");
+
+  const [detailTableId, setDetailTableId] = useState<number | null>(null);
 
   const search = useCallback(
     async (keyword: string) => {
@@ -43,6 +49,37 @@ export default function TablesPage({ isOperator }: { isOperator: boolean }) {
     }
   }, [isOperator]);
 
+  const selectedSourceName = useMemo(
+    () => dataSources.find((source) => source.id === selectedSource)?.name,
+    [dataSources, selectedSource],
+  );
+
+  const registeredKeys = useMemo(
+    () => new Set(tables.map((table) => `${table.catalog}.${table.schema}.${table.table}`)),
+    [tables],
+  );
+
+  const schemas = useMemo(
+    () => Array.from(new Set(discovered.map((table) => table.schema))).sort(),
+    [discovered],
+  );
+
+  const visibleDiscovered = useMemo(
+    () => discovered.filter((table) => !schemaFilter || table.schema === schemaFilter),
+    [discovered, schemaFilter],
+  );
+
+  function isRegistered(table: DiscoveredTable): boolean {
+    return selectedSourceName !== undefined && registeredKeys.has(`${selectedSourceName}.${table.schema}.${table.table}`);
+  }
+
+  function renderTemplate(table: DiscoveredTable): string {
+    return descriptionTemplate
+      .replaceAll("{schema}", table.schema)
+      .replaceAll("{table}", table.table)
+      .replaceAll("{type}", table.type);
+  }
+
   async function onDiscover() {
     if (selectedSource === undefined) {
       message.warning("请先选择数据源");
@@ -52,6 +89,8 @@ export default function TablesPage({ isOperator }: { isOperator: boolean }) {
     try {
       setDiscovered(await api.discoverTables(selectedSource));
       setDescriptions({});
+      setSchemaFilter(undefined);
+      setSelectedKeys([]);
     } catch (e) {
       message.error("发现表失败：" + String(e));
     } finally {
@@ -59,24 +98,59 @@ export default function TablesPage({ isOperator }: { isOperator: boolean }) {
     }
   }
 
-  async function onRegister(table: DiscoveredTable) {
+  async function register(table: DiscoveredTable): Promise<void> {
     if (selectedSource === undefined) {
       return;
     }
     const key = table.schema + "." + table.table;
+    const description = descriptions[key] ?? renderTemplate(table);
+    await api.registerTable({
+      dataSourceId: selectedSource,
+      schema: table.schema,
+      table: table.table,
+      description,
+    });
+  }
+
+  async function onRegister(table: DiscoveredTable) {
     try {
-      await api.registerTable({
-        dataSourceId: selectedSource,
-        schema: table.schema,
-        table: table.table,
-        description: descriptions[key] ?? "",
-      });
+      await register(table);
       message.success("表已注册");
       await search(query);
-      setDiscovered([]);
     } catch (e) {
       message.error(String(e));
     }
+  }
+
+  async function onBatchRegister() {
+    const targets = visibleDiscovered.filter(
+      (table) => selectedKeys.includes(table.schema + "." + table.table) && !isRegistered(table),
+    );
+    if (targets.length === 0) {
+      message.warning("请先勾选未注册的表");
+      return;
+    }
+    try {
+      for (const table of targets) {
+        await register(table);
+      }
+      message.success(`已注册 ${targets.length} 张表`);
+      setSelectedKeys([]);
+      await search(query);
+    } catch (e) {
+      message.error(String(e));
+    }
+  }
+
+  function onApplyTemplate() {
+    const next = { ...descriptions };
+    for (const table of visibleDiscovered) {
+      const key = table.schema + "." + table.table;
+      if (!next[key]) {
+        next[key] = renderTemplate(table);
+      }
+    }
+    setDescriptions(next);
   }
 
   async function onUnregister(id: number) {
@@ -97,30 +171,39 @@ export default function TablesPage({ isOperator }: { isOperator: boolean }) {
     },
     { title: "描述", dataIndex: "description", render: (value: string) => value || "-" },
     { title: "注册人", dataIndex: "registeredBy", width: 120 },
-    ...(isOperator
-      ? [
-          {
-            title: "操作",
-            width: 100,
-            render: (_: unknown, record: RegisteredTableView) => (
-              <Popconfirm title="确认注销该表？" onConfirm={() => onUnregister(record.id)} okText="注销" cancelText="取消">
-                <Button type="link" size="small" danger>
-                  注销
-                </Button>
-              </Popconfirm>
-            ),
-          },
-        ]
-      : []),
+    {
+      title: "操作",
+      width: 160,
+      render: (_, record) => (
+        <Space>
+          <Button type="link" size="small" onClick={() => setDetailTableId(record.id)}>
+            详情
+          </Button>
+          {isOperator && (
+            <Popconfirm title="确认注销该表？" onConfirm={() => onUnregister(record.id)} okText="注销" cancelText="取消">
+              <Button type="link" size="small" danger>
+                注销
+              </Button>
+            </Popconfirm>
+          )}
+        </Space>
+      ),
+    },
   ];
 
   const discoveredColumns: ColumnsType<DiscoveredTable> = [
-    { title: "Schema", dataIndex: "schema", width: 180 },
+    { title: "Schema", dataIndex: "schema", width: 160 },
     { title: "表", dataIndex: "table" },
-    { title: "类型", dataIndex: "type", width: 140 },
+    { title: "类型", dataIndex: "type", width: 120 },
+    {
+      title: "状态",
+      width: 100,
+      render: (_, record) =>
+        isRegistered(record) ? <Tag color="green">已注册</Tag> : <Tag>未注册</Tag>,
+    },
     {
       title: "描述",
-      width: 260,
+      width: 240,
       render: (_, record) => {
         const key = record.schema + "." + record.table;
         return (
@@ -134,12 +217,15 @@ export default function TablesPage({ isOperator }: { isOperator: boolean }) {
     },
     {
       title: "操作",
-      width: 100,
-      render: (_, record) => (
-        <Button type="link" size="small" onClick={() => onRegister(record)}>
-          注册
-        </Button>
-      ),
+      width: 90,
+      render: (_, record) =>
+        isRegistered(record) ? (
+          <Tag color="green">已注册</Tag>
+        ) : (
+          <Button type="link" size="small" onClick={() => onRegister(record)}>
+            注册
+          </Button>
+        ),
     },
   ];
 
@@ -177,7 +263,7 @@ export default function TablesPage({ isOperator }: { isOperator: boolean }) {
         <Card className="df-glass" variant="borderless" title="发现并注册表">
           <Space style={{ marginBottom: 16 }} wrap>
             <Select
-              style={{ width: 280 }}
+              style={{ width: 240 }}
               placeholder="选择数据源"
               value={selectedSource}
               onChange={setSelectedSource}
@@ -189,16 +275,45 @@ export default function TablesPage({ isOperator }: { isOperator: boolean }) {
             <Button type="primary" loading={discovering} onClick={onDiscover}>
               发现表
             </Button>
+            {discovered.length > 0 && (
+              <>
+                <Select
+                  style={{ width: 180 }}
+                  allowClear
+                  placeholder="按 schema 筛选"
+                  value={schemaFilter}
+                  onChange={setSchemaFilter}
+                  options={schemas.map((schema) => ({ value: schema, label: schema }))}
+                />
+                <Input
+                  style={{ width: 200 }}
+                  placeholder="描述模板"
+                  value={descriptionTemplate}
+                  onChange={(e) => setDescriptionTemplate(e.target.value)}
+                />
+                <Button onClick={onApplyTemplate}>应用模板</Button>
+                <Button type="primary" ghost onClick={onBatchRegister}>
+                  批量注册（{selectedKeys.length}）
+                </Button>
+              </>
+            )}
           </Space>
           <Table<DiscoveredTable>
             rowKey={(record) => record.schema + "." + record.table}
             columns={discoveredColumns}
-            dataSource={discovered}
+            dataSource={visibleDiscovered}
+            rowSelection={{
+              selectedRowKeys: selectedKeys,
+              onChange: setSelectedKeys,
+              getCheckboxProps: (record) => ({ disabled: isRegistered(record) }),
+            }}
             pagination={{ pageSize: 8, hideOnSinglePage: true }}
             locale={{ emptyText: <Empty description="选择数据源后点击“发现表”" /> }}
           />
         </Card>
       )}
+
+      <TableDetailDrawer tableId={detailTableId} open={detailTableId !== null} onClose={() => setDetailTableId(null)} />
     </div>
   );
 }

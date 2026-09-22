@@ -65,12 +65,25 @@ public class StatementClientQueryEngine
                             truncated = true;
                             break;
                         }
-                        rows.add(List.copyOf(row));
+                        rows.add(new ArrayList<>(row));
                     }
                     if (truncated) {
                         break;
                     }
                     statementClient.advance();
+                }
+
+                if (truncated) {
+                    // The statement may still be running; cancel it instead of demanding a final status
+                    // (finalStatusInfo requires the current position to be exhausted).
+                    try {
+                        statementClient.cancelLeafStage();
+                    }
+                    catch (RuntimeException ignored) {
+                        // best effort
+                    }
+                    statementClient.close();
+                    return new QueryResult(columns, rows, true);
                 }
 
                 QueryStatusInfo finalStatus = statementClient.finalStatusInfo();

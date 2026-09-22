@@ -7,6 +7,7 @@ import {
   SafetyCertificateOutlined,
   SunOutlined,
   TableOutlined,
+  TeamOutlined,
   UserOutlined,
 } from "@ant-design/icons";
 import { Avatar, Dropdown, Layout, Menu, Space, Switch, Tag, Typography } from "antd";
@@ -45,6 +46,7 @@ export default function AppShell({ username, role, onLogout }: Props) {
       ? [
           { key: "/data-sources", icon: <DatabaseOutlined />, label: "数据源管理" },
           { key: "/permissions", icon: <SafetyCertificateOutlined />, label: "权限管理" },
+          { key: "/users", icon: <TeamOutlined />, label: "用户管理" },
         ]
       : []),
   ];

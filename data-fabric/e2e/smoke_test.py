@@ -235,6 +235,27 @@ def verify_table_catalog():
     assert status == 200 and name not in body, f"viewer should not see ungranted table from {name}: {status} {body}"
     print("[backend] table catalog filtered by permission OK")
 
+    # Workbench object tree / table detail data sources.
+    status, body = http("GET", BACKEND_URL + f"/api/tables/{table_id}/detail", headers=auth)
+    assert status == 200 and "订单表" in body and name in body, (status, body)
+    status, body = http("GET", BACKEND_URL + f"/api/tables/{table_id}/columns", headers=auth)
+    assert status == 200 and "amount" in body, (status, body)
+    status, body = http("GET", BACKEND_URL + f"/api/tables/{table_id}/sample", headers=auth)
+    assert status == 200 and "columns" in body, (status, body)
+    status, body = http(
+        "GET",
+        BACKEND_URL + f"/api/metadata/suggest?type=table&parent={name}.ob_source",
+        headers=auth,
+    )
+    assert status == 200 and "orders" in body, (status, body)
+    status, body = http(
+        "GET",
+        BACKEND_URL + f"/api/tables/{table_id}/columns",
+        headers={"Authorization": "Bearer " + viewer_token},
+    )
+    assert status == 404, f"viewer must not read ungranted table structure: {status} {body}"
+    print("[workbench] table meaning/structure/sample + object tree suggestion OK, ungranted hidden")
+
     assert http("DELETE", BACKEND_URL + f"/api/tables/{table_id}", None, auth)[0] == 204
     assert http("DELETE", BACKEND_URL + f"/api/data-sources/{data_source_id}", None, auth)[0] == 200
     print("[backend] table catalog cleanup OK")
@@ -381,6 +402,10 @@ def verify_query_execution():
     assert status == 409, status
     print("[query] failed query is not exportable (409)")
 
+    view = run_query(operator_token, "SELECT CAST(NULL AS varchar) AS n, '' AS e")
+    assert view["state"] == "FINISHED" and view["rows"] == [[None, ""]], view
+    print("[query] NULL and empty string preserved in result")
+
     status, _, _ = http_raw(
         BACKEND_URL + f"/api/queries/{query_id}/export?format=csv",
         {"Authorization": "Bearer " + viewer_token},
@@ -400,6 +425,72 @@ def verify_query_execution():
     print("[query] predicate pushdown confirmed (constraint on [id], no Filter node)")
 
 
+def verify_query_history_and_favorites():
+    operator_token = login("admin", "admin")
+    viewer_token = login("viewer", "viewer")
+    operator_auth = {"Authorization": "Bearer " + operator_token}
+    viewer_auth = {"Authorization": "Bearer " + viewer_token}
+
+    marker = "e2e_history_" + str(int(time.time()))
+    view = run_query(operator_token, f"SELECT 42 AS {marker}")
+    assert view["state"] == "FINISHED", view
+
+    status, body = http("GET", BACKEND_URL + "/api/query-history", headers=operator_auth)
+    assert status == 200 and marker in body, (status, body)
+    assert '"state":"FINISHED"' in body and '"rowCount":1' in body, body
+    print("[history] executed query recorded with state and row count")
+
+    status, body = http("GET", BACKEND_URL + "/api/query-history", headers=viewer_auth)
+    assert status == 200 and marker not in body, f"history leaked across users: {body}"
+    print("[history] history is isolated per user")
+
+    favorite = "e2e_saved_" + str(int(time.time()))
+    status, body = http(
+        "POST",
+        BACKEND_URL + "/api/saved-queries",
+        json.dumps({"name": favorite, "sql": "SELECT 1"}),
+        operator_auth,
+    )
+    assert status == 201 and favorite in body, (status, body)
+    saved_id = json.loads(body)["id"]
+    print("[favorites] named query saved")
+
+    status, body = http("GET", BACKEND_URL + "/api/saved-queries", headers=operator_auth)
+    assert status == 200 and favorite in body and "SELECT 1" in body, (status, body)
+
+    status, body = http("GET", BACKEND_URL + "/api/saved-queries", headers=viewer_auth)
+    assert favorite not in body, f"saved queries leaked across users: {body}"
+    print("[favorites] saved queries are isolated per user")
+
+    rerun = run_query(operator_token, "SELECT 1")
+    assert rerun["state"] == "FINISHED", rerun
+    print("[favorites] saved query executes")
+
+    assert http("DELETE", BACKEND_URL + f"/api/saved-queries/{saved_id}", None, operator_auth)[0] == 204
+    status, body = http("GET", BACKEND_URL + "/api/saved-queries", headers=operator_auth)
+    assert favorite not in body, body
+    print("[favorites] saved query deleted")
+
+
+def verify_large_result():
+    operator_token = login("admin", "admin")
+
+    view = run_query(operator_token, "SELECT x FROM UNNEST(sequence(1, 10000)) AS t(x)")
+    assert view["state"] == "FINISHED", view
+    assert len(view["rows"]) == 10000, len(view["rows"])
+    assert view["truncated"] is False, view["truncated"]
+    print("[perf] 10000-row result returned untruncated")
+
+    view = run_query(
+        operator_token,
+        "SELECT a.x FROM UNNEST(sequence(1, 10000)) AS a(x) "
+        "CROSS JOIN UNNEST(sequence(1, 2)) AS b(y)",
+    )
+    assert view["state"] == "FINISHED", view
+    assert view["truncated"] is True and len(view["rows"]) == 10000, (view["truncated"], len(view["rows"]))
+    print("[perf] large result truncated at max-rows")
+
+
 def main():
     verify_trino_cross_source()
     verify_backend()
@@ -407,6 +498,8 @@ def main():
     verify_table_catalog()
     verify_permission_enforcement()
     verify_query_execution()
+    verify_large_result()
+    verify_query_history_and_favorites()
     print("E2E_OK")
 
 

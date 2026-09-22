@@ -20,22 +20,28 @@ import java.util.concurrent.TimeUnit;
 public class QueryService
 {
     private final QueryEngine engine;
+    private final QueryHistoryRepository historyRepository;
     private final ExecutorService executor;
     private final ScheduledExecutorService scheduler;
     private final Map<String, QueryExecution> executions = new ConcurrentHashMap<>();
     private final Map<String, QueryEngine.Handle> handles = new ConcurrentHashMap<>();
     private final int maxRows;
     private final Duration timeout;
+    private final int historyLimit;
 
     public QueryService(
             QueryEngine engine,
+            QueryHistoryRepository historyRepository,
             @Value("${data-fabric.query.max-rows:10000}") int maxRows,
             @Value("${data-fabric.query.timeout:30s}") Duration timeout,
-            @Value("${data-fabric.query.threads:4}") int threads)
+            @Value("${data-fabric.query.threads:4}") int threads,
+            @Value("${data-fabric.query.history-limit:200}") int historyLimit)
     {
         this.engine = engine;
+        this.historyRepository = historyRepository;
         this.maxRows = maxRows;
         this.timeout = timeout;
+        this.historyLimit = historyLimit;
         this.executor = Executors.newFixedThreadPool(threads, runnable -> daemonThread(runnable, "data-fabric-query"));
         this.scheduler = Executors.newSingleThreadScheduledExecutor(runnable -> daemonThread(runnable, "data-fabric-query-timeout"));
     }
@@ -48,6 +54,7 @@ public class QueryService
         String queryId = UUID.randomUUID().toString();
         QueryExecution execution = new QueryExecution(queryId, user, sql);
         executions.put(queryId, execution);
+        historyRepository.started(queryId, user, sql, execution.startedAt());
         executor.submit(() -> run(execution));
         return execution.view();
     }
@@ -75,7 +82,22 @@ public class QueryService
                 timeoutTask.cancel(false);
             }
             handles.remove(execution.queryId());
+            recordCompletion(execution);
         }
+    }
+
+    private void recordCompletion(QueryExecution execution)
+    {
+        QueryExecutionView view = execution.view();
+        Long rowCount = view.state().equals(QueryState.FINISHED.name()) ? (long) view.rows().size() : null;
+        historyRepository.completed(
+                view.queryId(),
+                QueryState.valueOf(view.state()),
+                view.finishedAt(),
+                rowCount,
+                view.truncated(),
+                view.error());
+        historyRepository.trim(execution.owner(), historyLimit);
     }
 
     public QueryExecutionView get(String user, String queryId)

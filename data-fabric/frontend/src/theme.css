@@ -151,3 +151,39 @@ body {
   border-inline-end: none !important;
   background: transparent !important;
 }
+
+.df-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.df-cell-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.df-cell .df-copy {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  flex: none;
+}
+
+.df-cell:hover .df-copy {
+  opacity: 1;
+}
+
+.df-cell-full {
+  margin: 0;
+  max-height: 320px;
+  max-width: 520px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}

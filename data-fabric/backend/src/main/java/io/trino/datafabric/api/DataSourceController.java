@@ -57,6 +57,14 @@ public class DataSourceController
         return dataSourceService.register(user.username(), request);
     }
 
+    @PostMapping("/test")
+    @RequireRole(Role.OPERATOR)
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void test(@RequestBody DataSourceRequest request)
+    {
+        dataSourceService.testConnection(request);
+    }
+
     @PutMapping("/{id}")
     @RequireRole(Role.OPERATOR)
     public DataSourceView update(@PathVariable long id, @RequestBody DataSourceRequest request)

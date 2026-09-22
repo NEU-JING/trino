@@ -23,6 +23,7 @@ export default function DataSourcesPage({ isOperator = true }: { isOperator?: bo
   const [dataSources, setDataSources] = useState<DataSourceView[]>([]);
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [testing, setTesting] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -53,6 +54,18 @@ export default function DataSourcesPage({ isOperator = true }: { isOperator?: bo
       await refresh();
     } catch (e) {
       message.error(String(e));
+    }
+  }
+
+  async function onTest(values: DataSourceRequest) {
+    setTesting(true);
+    try {
+      await api.testDataSourceConnection(values);
+      message.success("连接成功");
+    } catch (e) {
+      message.error("连接失败：" + String(e));
+    } finally {
+      setTesting(false);
     }
   }
 
@@ -190,6 +203,17 @@ export default function DataSourcesPage({ isOperator = true }: { isOperator?: bo
             <Space>
               <Button type="primary" htmlType="submit">
                 {editingId === null ? "注册" : "保存"}
+              </Button>
+              <Button
+                loading={testing}
+                onClick={() => {
+                  form
+                    .validateFields()
+                    .then(onTest)
+                    .catch(() => undefined);
+                }}
+              >
+                测试连接
               </Button>
               {editingId !== null && <Button onClick={onCancelEdit}>取消</Button>}
             </Space>

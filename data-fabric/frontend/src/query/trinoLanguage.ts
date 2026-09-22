@@ -1,0 +1,48 @@
+import { SQLDialect } from "@codemirror/lang-sql";
+
+export const TRINO_KEYWORDS = [
+  "SELECT", "FROM", "WHERE", "GROUP", "BY", "HAVING", "ORDER", "LIMIT", "OFFSET",
+  "FETCH", "FIRST", "NEXT", "ROW", "ROWS", "ONLY", "WITH", "AS", "DISTINCT", "ALL",
+  "UNION", "INTERSECT", "EXCEPT", "JOIN", "INNER", "LEFT", "RIGHT", "FULL", "OUTER",
+  "CROSS", "ON", "USING", "NATURAL", "AND", "OR", "NOT", "IN", "EXISTS", "BETWEEN",
+  "LIKE", "IS", "NULL", "TRUE", "FALSE", "CASE", "WHEN", "THEN", "ELSE", "END",
+  "CAST", "TRY_CAST", "INSERT", "INTO", "VALUES", "UPDATE", "DELETE", "MERGE",
+  "CREATE", "TABLE", "VIEW", "SCHEMA", "DATABASE", "CATALOG", "DROP", "ALTER",
+  "ADD", "COLUMN", "RENAME", "TO", "SET", "SHOW", "DESCRIBE", "DESC", "EXPLAIN",
+  "ANALYZE", "USE", "PARTITION", "OVER", "WINDOW", "FILTER", "UNNEST", "LATERAL",
+  "TABLESAMPLE", "ORDINALITY", "ASC", "NULLS", "LAST", "ESCAPE", "CURRENT_DATE",
+  "CURRENT_TIME", "CURRENT_TIMESTAMP", "LOCALTIME", "LOCALTIMESTAMP", "AT", "TIME",
+  "ZONE", "IF", "CASCADE", "RESTRICT", "GRANT", "REVOKE", "PRIVILEGES", "PREPARE",
+  "DEALLOCATE", "EXECUTE", "CALL", "COMMENT", "START", "TRANSACTION", "COMMIT",
+  "ROLLBACK", "WORK", "MATCH_RECOGNIZE", "MEASURES", "PATTERN", "AFTER", "DEFINE",
+  "SKIP", "PAST", "THROUGH", "REFRESH", "MATERIALIZED", "RESET", "SESSION",
+];
+
+export const TRINO_TYPES = [
+  "BOOLEAN", "TINYINT", "SMALLINT", "INTEGER", "INT", "BIGINT", "REAL", "DOUBLE",
+  "DECIMAL", "NUMERIC", "VARCHAR", "CHAR", "VARBINARY", "JSON", "DATE", "TIME",
+  "TIMESTAMP", "INTERVAL", "ARRAY", "MAP", "ROW", "UUID", "IPADDRESS", "UNKNOWN",
+];
+
+export const TRINO_BUILTINS = [
+  "COUNT", "SUM", "AVG", "MIN", "MAX", "ABS", "COALESCE", "NULLIF", "GREATEST",
+  "LEAST", "LOWER", "UPPER", "LENGTH", "SUBSTR", "SUBSTRING", "TRIM", "LTRIM",
+  "RTRIM", "CONCAT", "REPLACE", "ROUND", "CEIL", "CEILING", "FLOOR", "POWER", "SQRT",
+  "MOD", "NOW", "CURRENT_DATE", "CURRENT_TIME", "CURRENT_TIMESTAMP", "DATE_ADD",
+  "DATE_DIFF", "DATE_TRUNC", "DATE_FORMAT", "FORMAT_DATETIME", "PARSE_DATETIME",
+  "ARRAY_AGG", "APPROX_DISTINCT", "CARDINALITY", "ELEMENT_AT", "ARRAY_JOIN",
+  "JSON_EXTRACT", "JSON_VALUE", "REGEXP_LIKE", "REGEXP_REPLACE", "REGEXP_EXTRACT",
+  "ROW_NUMBER", "RANK", "DENSE_RANK", "LAG", "LEAD", "FIRST_VALUE", "LAST_VALUE",
+  "NTH_VALUE", "NTILE", "SPLIT_PART", "STRPOS", "TO_JSON", "FROM_JSON", "TYPEOF",
+];
+
+export const trinoDialect = SQLDialect.define({
+  keywords: TRINO_KEYWORDS.join(" ").toLowerCase(),
+  builtin: TRINO_BUILTINS.join(" ").toLowerCase(),
+  types: TRINO_TYPES.join(" ").toLowerCase(),
+  backslashEscapes: false,
+  hashComments: false,
+  slashComments: true,
+  doubleQuotedStrings: false,
+  caseInsensitiveIdentifiers: true,
+});

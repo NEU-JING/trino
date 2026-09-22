@@ -32,6 +32,11 @@ public class ApiClient
         return send("PUT", path, authorization, jsonBody);
     }
 
+    public Response patch(String path, String authorization, String jsonBody)
+    {
+        return send("PATCH", path, authorization, jsonBody);
+    }
+
     public Response delete(String path, String authorization)
     {
         return send("DELETE", path, authorization, null);

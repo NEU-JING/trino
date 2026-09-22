@@ -48,6 +48,13 @@ public class DataSourceService
         return toView(repository.findById(id).orElseThrow());
     }
 
+    public void testConnection(DataSourceRequest request)
+    {
+        BusinessType businessType = BusinessType.from(request.businessType());
+        DataSourceConnection connection = validateConnection(businessType, request);
+        verifyReachable(businessType, connectorProperties(businessType, connection));
+    }
+
     public List<DataSourceView> list()
     {
         return repository.findAll().stream().map(DataSourceService::toView).toList();

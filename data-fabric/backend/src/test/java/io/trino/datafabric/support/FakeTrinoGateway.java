@@ -17,6 +17,7 @@ public class FakeTrinoGateway
 {
     private final Map<String, String> catalogs = new ConcurrentHashMap<>();
     private final Map<String, Map<String, String>> catalogProperties = new ConcurrentHashMap<>();
+    private final Map<String, QueryResult> queryResults = new ConcurrentHashMap<>();
     private List<String> queryColumns = List.of();
     private List<List<Object>> queryRows = List.of();
 
@@ -26,9 +27,20 @@ public class FakeTrinoGateway
         this.queryRows = List.copyOf(rows);
     }
 
+    /** Returns the mapped result for any SQL containing {@code sqlFragment}, before the default. */
+    public void setQueryResult(String sqlFragment, List<String> columns, List<List<Object>> rows)
+    {
+        queryResults.put(sqlFragment, new QueryResult(List.copyOf(columns), List.copyOf(rows)));
+    }
+
     @Override
     public QueryResult execute(String sql, String actingUser)
     {
+        for (Map.Entry<String, QueryResult> entry : queryResults.entrySet()) {
+            if (sql.contains(entry.getKey())) {
+                return entry.getValue();
+            }
+        }
         return new QueryResult(queryColumns, queryRows);
     }
 
@@ -72,6 +84,7 @@ public class FakeTrinoGateway
     {
         catalogs.clear();
         catalogProperties.clear();
+        queryResults.clear();
         queryColumns = List.of();
         queryRows = List.of();
     }

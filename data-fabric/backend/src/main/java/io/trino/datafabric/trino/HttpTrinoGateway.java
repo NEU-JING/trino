@@ -55,7 +55,7 @@ public class HttpTrinoGateway
                     columns = status.getColumns().stream().map(Column::getName).toList();
                 }
                 for (List<Object> row : client.currentRows()) {
-                    rows.add(List.copyOf(row));
+                    rows.add(new ArrayList<>(row));
                 }
                 client.advance();
             }

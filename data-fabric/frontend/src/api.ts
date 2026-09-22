@@ -66,6 +66,36 @@ export interface UserView {
   enabled: boolean;
 }
 
+export interface SuggestionView {
+  value: string;
+  label: string;
+}
+
+export interface ColumnMetadataView {
+  name: string;
+  type: string;
+  nullable: boolean;
+  comment: string;
+}
+
+export interface SampleRowsView {
+  columns: string[];
+  rows: unknown[][];
+}
+
+export interface TableDetailView {
+  id: number;
+  catalog: string;
+  schema: string;
+  table: string;
+  description: string;
+  registeredBy: string;
+  rowCount: number | null;
+  principals: string[];
+}
+
+export type SuggestionType = "catalog" | "schema" | "table" | "column";
+
 export interface QueryExecutionView {
   queryId: string;
   state: string;
@@ -90,6 +120,27 @@ export interface QueryHistoryView {
   state: string;
   startedAt: string;
   finishedAt: string | null;
+}
+
+export interface QueryHistoryEntry {
+  id: number;
+  queryId: string;
+  user: string;
+  sql: string;
+  state: string;
+  startedAt: string;
+  finishedAt: string | null;
+  rowCount: number | null;
+  truncated: boolean;
+  error: string | null;
+}
+
+export interface SavedQueryView {
+  id: number;
+  name: string;
+  sql: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface OverviewStatsView {
@@ -215,6 +266,51 @@ export function listUsers(): Promise<UserView[]> {
   return request<UserView[]>("/api/admin/users");
 }
 
+export function createUser(user: { username: string; password: string; role: string }): Promise<UserView> {
+  return request<UserView>("/api/admin/users", {
+    method: "POST",
+    body: JSON.stringify(user),
+  });
+}
+
+export function updateUser(username: string, update: { role?: string; enabled?: boolean }): Promise<UserView> {
+  return request<UserView>(`/api/admin/users/${encodeURIComponent(username)}`, {
+    method: "PATCH",
+    body: JSON.stringify(update),
+  });
+}
+
+export function suggestMetadata(type: SuggestionType, parent?: string, query?: string): Promise<SuggestionView[]> {
+  const params = new URLSearchParams({ type });
+  if (parent) {
+    params.set("parent", parent);
+  }
+  if (query) {
+    params.set("q", query);
+  }
+  return request<SuggestionView[]>(`/api/metadata/suggest?${params.toString()}`);
+}
+
+export function getTableColumns(id: number): Promise<ColumnMetadataView[]> {
+  return request<ColumnMetadataView[]>(`/api/tables/${id}/columns`);
+}
+
+export function getTableSample(id: number, limit?: number): Promise<SampleRowsView> {
+  const suffix = limit ? `?limit=${limit}` : "";
+  return request<SampleRowsView>(`/api/tables/${id}/sample${suffix}`);
+}
+
+export function getTableDetail(id: number): Promise<TableDetailView> {
+  return request<TableDetailView>(`/api/tables/${id}/detail`);
+}
+
+export function testDataSourceConnection(dataSource: DataSourceRequest): Promise<void> {
+  return request<void>("/api/data-sources/test", {
+    method: "POST",
+    body: JSON.stringify(dataSource),
+  });
+}
+
 export function getOverviewStats(): Promise<OverviewStatsView> {
   return request<OverviewStatsView>("/api/overview/stats");
 }
@@ -236,6 +332,26 @@ export function getQuery(queryId: string): Promise<QueryExecutionView> {
 
 export function cancelQuery(queryId: string): Promise<QueryExecutionView> {
   return request<QueryExecutionView>(`/api/queries/${queryId}/cancel`, { method: "POST" });
+}
+
+export function listQueryHistory(limit?: number): Promise<QueryHistoryEntry[]> {
+  const suffix = limit ? `?limit=${limit}` : "";
+  return request<QueryHistoryEntry[]>(`/api/query-history${suffix}`);
+}
+
+export function listSavedQueries(): Promise<SavedQueryView[]> {
+  return request<SavedQueryView[]>("/api/saved-queries");
+}
+
+export function saveQuery(name: string, sql: string): Promise<SavedQueryView> {
+  return request<SavedQueryView>("/api/saved-queries", {
+    method: "POST",
+    body: JSON.stringify({ name, sql }),
+  });
+}
+
+export function deleteSavedQuery(id: number): Promise<void> {
+  return request<void>(`/api/saved-queries/${id}`, { method: "DELETE" });
 }
 
 export async function downloadExport(queryId: string, format: "csv" | "xlsx"): Promise<void> {
