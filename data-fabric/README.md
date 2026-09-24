@@ -31,6 +31,7 @@ data-fabric/
   backend/    Spring Boot 4.1.1 / Java 25 service
   frontend/   React 19 + Vite 7 + TypeScript
   deploy/     docker-compose + Trino configuration
+  datasets/   versioned demo seed data (OA / HR / finance) + sample queries
   e2e/        cross-source + platform end-to-end smoke test
   HANDOVER.md session handover notes
 ```
@@ -107,6 +108,23 @@ whole UI + API is one origin.
 
 `data-fabric/deploy/trino/` holds `config.properties`, `catalog-store.properties` (dynamic catalog
 persistence) and `access-control.properties` (HTTP rules endpoint + refresh period).
+
+### Demo data initialization
+
+The office demo datasets — **OA** (OceanBase simulator), **HR** (Greenplum simulator) and
+**Finance** (Dameng) — are versioned under `data-fabric/datasets/` and loaded as a deployment
+step. They are idempotent and deterministic, so an empty environment can be rebuilt at any time:
+
+```bash
+cd data-fabric/datasets
+./seed_all.sh          # build + load all three domains (drops/recreates each schema)
+./register_tables.sh   # register data sources, tables and business descriptions in the platform
+```
+
+`seed_all.sh` reads credentials from `data-fabric/deploy/.env` (server-only, never committed) and
+uses the containerized `mysql` / `psql` / `disql` clients. See `datasets/README.md` for the domain
+model and shared join keys, and `datasets/examples/sample_queries.sql` for ready-to-run
+cross-source queries.
 
 ## Tests
 

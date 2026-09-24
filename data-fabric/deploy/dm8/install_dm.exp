@@ -1,0 +1,14 @@
+#!/usr/bin/expect -f
+set timeout 1800
+log_user 1
+spawn /tmp/DMInstall.bin -i
+expect {
+  -re {language.*:} { send "2\r"; exp_continue }
+  -re {Key File.*:} { send "N\r"; exp_continue }
+  -re {Confirm to Install.*:} { send "Y\r"; exp_continue }
+  -re {\(Y/y:Yes N/n:No\)\s*:} { send "Y\r"; exp_continue }
+  -re {\[[^]]*\]\s*:} { send "\r"; exp_continue }
+  timeout { puts "\nEXPECT_TIMEOUT"; exit 2 }
+  eof { }
+}
+exit 0

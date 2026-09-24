@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import * as api from "./api";
 import type { DataSourceRequest, DataSourceView } from "./api";
 
-const BUSINESS_TYPES = ["OceanBase", "Greenplum"];
+const BUSINESS_TYPES = ["OceanBase", "Greenplum", "达梦"];
 
 const emptyForm: DataSourceRequest = {
   name: "",

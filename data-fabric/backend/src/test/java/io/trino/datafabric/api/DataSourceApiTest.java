@@ -71,6 +71,17 @@ class DataSourceApiTest
     }
 
     @Test
+    void registerDamengUsesDamengConnectorAndAlias()
+    {
+        ApiClient.Response response = client.post("/api/data-sources", bearer(operator()), body("dm_demo", "达梦", "dm-host"));
+        assertThat(response.status()).isEqualTo(201);
+        assertThat(response.body()).contains("达梦");
+        assertThat(response.body()).doesNotContain("dameng");
+        assertThat(fake.catalogConnector("dm_demo")).isEqualTo("dameng");
+        assertThat(fake.connectionUrl("dm_demo")).isEqualTo("jdbc:dm://dm-host:3306");
+    }
+
+    @Test
     void registerUnreachableConnectionIsRejectedAndCatalogRolledBack()
     {
         ApiClient.Response response = client.post("/api/data-sources", bearer(operator()), body("bad_demo", "OceanBase", "unreachable"));

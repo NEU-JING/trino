@@ -7,7 +7,8 @@ package io.trino.datafabric.datasource;
 public enum BusinessType
 {
     OCEANBASE("mysql", "OceanBase"),
-    GREENPLUM("postgresql", "Greenplum");
+    GREENPLUM("postgresql", "Greenplum"),
+    DAMENG("dameng", "达梦");
 
     private final String connectorName;
     private final String displayName;

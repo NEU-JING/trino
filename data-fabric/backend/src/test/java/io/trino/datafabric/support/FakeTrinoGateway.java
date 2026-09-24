@@ -75,6 +75,16 @@ public class FakeTrinoGateway
         return catalogs.containsKey(catalog);
     }
 
+    public String catalogConnector(String catalog)
+    {
+        return catalogs.get(catalog);
+    }
+
+    public String connectionUrl(String catalog)
+    {
+        return catalogProperties.getOrDefault(catalog, Map.of()).get("connection-url");
+    }
+
     public Set<String> catalogNames()
     {
         return Set.copyOf(catalogs.keySet());

@@ -144,6 +144,9 @@ public class DataSourceService
             case GREENPLUM -> properties.put(
                     "connection-url",
                     "jdbc:postgresql://%s:%d/%s".formatted(connection.host(), connection.port(), connection.database()));
+            case DAMENG -> properties.put(
+                    "connection-url",
+                    "jdbc:dm://%s:%d".formatted(connection.host(), connection.port()));
         }
         properties.put("connection-user", connection.user());
         properties.put("connection-password", connection.password());

@@ -54,3 +54,43 @@ trino:
 - [类型映射不完整] → 影响列可读性；按 D4 降级并记录。
 - [授权/许可] → 演示环境需确认达梦授权有效期。
 - [构建环境] → 首次需安装驱动到 `.m2`；在远端 Maven 容器内完成。
+
+## Spike Findings (tasks 1.1-1.3)
+
+环境：DM8 **8.1.4.170**（`dm8_20251203_x86_Ubuntu22_64` 官方 ISO 安装），容器内 `dminit` 初始化
+`PAGE_SIZE=16 / CHARSET=1 / CASE_SENSITIVE=0`，端口 5236。安装与运行**无需 `dm.key`**：
+服务端内置试用授权，**License 有效期至 2026-11-13**。
+
+关键结论：
+
+1. **信息模式**：达梦**没有**原生 `information_schema`（`SELECT ... FROM information_schema.tables`
+   报 `Invalid schema name`）。但 Trino 会为每个 catalog 合成 `<catalog>.information_schema`，
+   平台 `TableCatalogService`/`MetadataService` 查询的是 Trino 侧的信息模式，因此
+   **`TableCatalogService` 无需调整**（前提：达梦连接器实现好 JDBC 元数据读取）。
+2. **标识符大小写**：未加引号的标识符按**大写**存储；`CASE_SENSITIVE=0` 时查找不区分大小写
+   （`SELECT ... FROM demo.emp` 与 `DEMO.EMP` 均可）。连接器标识符引用符使用双引号 `"`。
+3. **类型映射清单**（达梦 → Trino）：见下表；`BOOLEAN` 不被支持（用 `BIT`）。
+
+   | 达梦类型 | JDBC type | Trino 类型 |
+   |---|---|---|
+   | TINYINT | TINYINT | TINYINT |
+   | SMALLINT | SMALLINT | SMALLINT |
+   | INT / INTEGER | INTEGER | INTEGER |
+   | BIGINT | BIGINT | BIGINT |
+   | REAL / FLOAT | REAL | REAL |
+   | DOUBLE [PRECISION] | DOUBLE | DOUBLE |
+   | DECIMAL / NUMERIC / NUMBER | DECIMAL | DECIMAL(p,s) |
+   | CHAR | CHAR | CHAR(n) |
+   | VARCHAR / VARCHAR2 | VARCHAR | VARCHAR(n) |
+   | CLOB / TEXT | CLOB(2005) | VARCHAR（降级） |
+   | BINARY / VARBINARY / BLOB / IMAGE | BINARY/VARBINARY/BLOB | VARBINARY |
+   | BIT | BIT(-7) | BOOLEAN |
+   | DATE | DATE | DATE |
+   | TIME | TIME | TIME(p) |
+   | TIMESTAMP / DATETIME | TIMESTAMP | TIMESTAMP(p) |
+
+4. **元数据接口**：`DatabaseMetaData.getTables/getColumns` 可用（`TABLE_SCHEM`/`TABLE_NAME`/`TYPE_NAME`/
+   `DATA_TYPE`/`COLUMN_SIZE`/`NULLABLE` 正常），`DBA_TABLES`/`ALL_TAB_COLUMNS` 亦可作为兜底。
+5. **驱动**：镜像内提供 `DmJdbcDriver8.jar`（类 `dm.jdbc.driver.DmDriver`）；任务书中的
+   `DmJdbcDriver18.jar` 在本版本实际文件名为 `DmJdbcDriver8.jar`，`install-file` 时使用该文件名。
+

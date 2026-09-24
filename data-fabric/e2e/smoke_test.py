@@ -28,6 +28,10 @@ SERVICE_USER = "trino_service"
 # Source-database passwords are provided out of band (never committed).
 OB_PASSWORD = os.environ.get("E2E_OB_PASSWORD", "")
 GP_PASSWORD = os.environ.get("E2E_GP_PASSWORD", "")
+# Dameng demo instance is created by this stack (see deploy/dm8), so the default is known.
+DM_PASSWORD = os.environ.get("E2E_DM_PASSWORD", "SYSDBA_dm001")
+DM_HOST = os.environ.get("E2E_DM_HOST", "data-fabric-dm8")
+DM_PORT = int(os.environ.get("E2E_DM_PORT", "5236"))
 REFRESH_WAIT_SECONDS = 13
 
 
@@ -491,6 +495,73 @@ def verify_large_result():
     print("[perf] large result truncated at max-rows")
 
 
+def verify_dameng_federation():
+    operator_token = login("admin", "admin")
+    auth = {"Authorization": "Bearer " + operator_token}
+    disable_leftovers(operator_token, "e2e_dm_")
+    name = "e2e_dm_" + str(int(time.time()))
+
+    payload = json.dumps({
+        "name": name,
+        "businessType": "达梦",
+        "host": DM_HOST,
+        "port": DM_PORT,
+        "database": "",
+        "user": "SYSDBA",
+        "password": DM_PASSWORD,
+    })
+    status, body = http("POST", BACKEND_URL + "/api/data-sources", payload, auth)
+    assert status == 201, f"register dameng data source failed: {status} {body}"
+    assert "达梦" in body and "dameng" not in body.lower(), f"alias/connector leak: {body}"
+    data_source_id = json.loads(body)["id"]
+    print("[dameng] platform registered data source as 达梦")
+
+    status, body = http("GET", BACKEND_URL + f"/api/data-sources/{data_source_id}/tables", headers=auth)
+    assert status == 200 and "emp" in body and "demo" in body, f"discovery failed: {status} {body}"
+    print("[dameng] table discovery OK (demo.emp)")
+
+    status, body = http(
+        "POST",
+        BACKEND_URL + "/api/tables",
+        json.dumps({"dataSourceId": data_source_id, "schema": "demo", "table": "emp", "description": "达梦员工表"}),
+        auth,
+    )
+    assert status == 201, f"register table failed: {status} {body}"
+    table_id = json.loads(body)["id"]
+
+    status, body = http("GET", BACKEND_URL + f"/api/tables/{table_id}/columns", headers=auth)
+    assert status == 200 and "name" in body.lower() and "salary" in body.lower(), f"columns failed: {status} {body}"
+    status, body = http("GET", BACKEND_URL + f"/api/tables/{table_id}/detail", headers=auth)
+    assert status == 200 and "达梦员工表" in body, f"detail failed: {status} {body}"
+    print("[dameng] table registered; columns + detail readable via Trino information_schema")
+
+    view = run_query(
+        operator_token,
+        "SELECT e.id, e.name, o.amount FROM oceanbase.ob_source.orders o "
+        "JOIN greenplum.public.customers c ON o.id = c.id "
+        f"JOIN {name}.demo.emp e ON e.id = o.id ORDER BY e.id",
+    )
+    assert view["state"] == "FINISHED", view
+    assert view["columns"] == ["id", "name", "amount"], view
+    assert view["rows"] == [[1, "alice", 100], [2, "bob", 200]], view
+    print("[dameng] cross-source JOIN (OceanBase + Greenplum + Dameng) OK:", view["rows"])
+
+    viewer_token = login("viewer", "viewer")
+    grant_status, grant_body = grant(operator_token, name, "demo", "emp")
+    assert grant_status == 201, (grant_status, grant_body)
+    time.sleep(REFRESH_WAIT_SECONDS)
+    status, body = http("GET", BACKEND_URL + "/api/tables", headers={"Authorization": "Bearer " + viewer_token})
+    assert status == 200 and name in body, f"granted dameng table not visible: {status} {body}"
+    viewer_view = run_query(viewer_token, f"SELECT count(*) FROM {name}.demo.emp")
+    assert viewer_view["state"] == "FINISHED", viewer_view
+    assert revoke(operator_token, name, "demo", "emp")[0] == 204
+    print("[dameng] grant to viewer + query OK")
+
+    assert http("DELETE", BACKEND_URL + f"/api/tables/{table_id}", None, auth)[0] == 204
+    assert http("DELETE", BACKEND_URL + f"/api/data-sources/{data_source_id}", None, auth)[0] == 200
+    print("[dameng] cleanup OK")
+
+
 def main():
     verify_trino_cross_source()
     verify_backend()
@@ -500,6 +571,7 @@ def main():
     verify_query_execution()
     verify_large_result()
     verify_query_history_and_favorites()
+    verify_dameng_federation()
     print("E2E_OK")
 
 
