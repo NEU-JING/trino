@@ -106,7 +106,13 @@ public class DatasetService
         String viewSql = compileSelect(dataset, fields, definition);
 
         int version = dataset.currentVersion() + 1;
-        applyToFabric(dataset, viewSql);
+        if (dataset.materializationMode() == MaterializationMode.MATERIALIZED) {
+            materialize(dataset, viewSql);
+        }
+        else {
+            applyToFabric(dataset, viewSql);
+            recordMaterialization(dataset, compiler.viewName(dataset.domain(), dataset.name()), MaterializationMode.VIRTUAL);
+        }
         repository.insertVersion(new DatasetVersion(
                 0,
                 dataset.id(),
@@ -118,7 +124,6 @@ public class DatasetService
                 Instant.now()));
         repository.updateCurrentVersion(dataset.id(), version, Instant.now());
         repository.updateStatus(dataset.id(), DatasetStatus.PUBLISHED, Instant.now());
-        recordMaterialization(dataset, compiler.viewName(dataset.domain(), dataset.name()), MaterializationMode.VIRTUAL);
         return detail(dataset.id());
     }
 
@@ -144,17 +149,7 @@ public class DatasetService
         List<DatasetField> fields = repository.fields(dataset.id());
         String viewSql = compileSelect(dataset, fields, definition);
         if (dataset.materializationMode() == MaterializationMode.MATERIALIZED) {
-            String target = compiler.viewName(dataset.domain(), dataset.name());
-            try {
-                trinoGateway.execute("CREATE SCHEMA IF NOT EXISTS " + compiler.schemaName(dataset.domain()), null);
-                trinoGateway.execute("DROP TABLE IF EXISTS " + target, null);
-                trinoGateway.execute("CREATE TABLE " + target + " AS\n" + viewSql, null);
-                recordMaterialization(dataset, target, MaterializationMode.MATERIALIZED);
-            }
-            catch (RuntimeException e) {
-                recordMaterialization(dataset, target, MaterializationMode.MATERIALIZED, "FAILED", e.getMessage());
-                throw new DatasetException("Materialization failed: " + e.getMessage(), e);
-            }
+            materialize(dataset, viewSql);
         }
         else {
             applyToFabric(dataset, viewSql);
@@ -299,10 +294,42 @@ public class DatasetService
         String viewName = compiler.viewName(dataset.domain(), dataset.name());
         try {
             trinoGateway.execute("CREATE SCHEMA IF NOT EXISTS " + compiler.schemaName(dataset.domain()), null);
+            dropIfExists(viewName);
             trinoGateway.execute("CREATE OR REPLACE VIEW " + viewName + " SECURITY INVOKER AS\n" + viewSql, null);
         }
         catch (RuntimeException e) {
             throw new DatasetException("Failed to publish dataset view: " + e.getMessage(), e);
+        }
+    }
+
+    private void materialize(Dataset dataset, String viewSql)
+    {
+        String target = compiler.viewName(dataset.domain(), dataset.name());
+        try {
+            trinoGateway.execute("CREATE SCHEMA IF NOT EXISTS " + compiler.schemaName(dataset.domain()), null);
+            dropIfExists(target);
+            trinoGateway.execute("CREATE TABLE " + target + " AS\n" + viewSql, null);
+            recordMaterialization(dataset, target, MaterializationMode.MATERIALIZED);
+        }
+        catch (RuntimeException e) {
+            recordMaterialization(dataset, target, MaterializationMode.MATERIALIZED, "FAILED", e.getMessage());
+            throw new DatasetException("Materialization failed: " + e.getMessage(), e);
+        }
+    }
+
+    private void dropIfExists(String target)
+    {
+        try {
+            trinoGateway.execute("DROP VIEW IF EXISTS " + target, null);
+        }
+        catch (RuntimeException ignored) {
+            // the object is not a view
+        }
+        try {
+            trinoGateway.execute("DROP TABLE IF EXISTS " + target, null);
+        }
+        catch (RuntimeException ignored) {
+            // the object is not a table
         }
     }
 

@@ -49,7 +49,7 @@ data-fabric 做**语义基质**，不做指标产品。指标表达为一种 `AG
 ① `fabric` catalog 中的视图（`CREATE OR REPLACE VIEW ... SECURITY INVOKER`，物化时为 CTAS 表）；
 ② 模型 API 返回的字段与语义。视图采用 `INVOKER` 安全模式，源表授权仍由 Trino 引擎强制。
 
-`fabric` catalog 由 `deploy/trino/catalog/fabric.properties` 提供（Hive + file metastore）。
+`fabric` catalog 由 `deploy/trino/catalog/fabric.properties` 提供（原型使用 Trino `memory` 连接器承载视图/物化表；生产环境可替换为 Hive/Iceberg 等持久化连接器）。
 
 ## 5. 契约 API
 

@@ -111,8 +111,9 @@ class DatasetApiTest
     void infersConfirmsAndGraphsRelations()
     {
         String token = bearer(operator());
-        long tableA = registeredTable("ds_rel", "public", "a");
-        long tableB = registeredTable("ds_rel", "public", "b");
+        long dataSourceId = createDataSource("ds_rel");
+        long tableA = registerTable(dataSourceId, "public", "a");
+        long tableB = registerTable(dataSourceId, "public", "b");
         createBaseDataset(token, "rel_a", tableA, "customer_id");
         createBaseDataset(token, "rel_b", tableB, "customer_id");
 
@@ -164,13 +165,21 @@ class DatasetApiTest
 
     private long registeredTable(String dataSourceName, String schema, String table)
     {
-        String token = bearer(operator());
-        ApiClient.Response source = client.post("/api/data-sources", token,
+        return registerTable(createDataSource(dataSourceName), schema, table);
+    }
+
+    private long createDataSource(String name)
+    {
+        ApiClient.Response source = client.post("/api/data-sources", bearer(operator()),
                 "{\"name\":\"%s\",\"businessType\":\"OceanBase\",\"host\":\"h\",\"port\":3306,\"database\":\"\",\"user\":\"u\",\"password\":\"p\"}"
-                        .formatted(dataSourceName));
+                        .formatted(name));
         assertThat(source.status()).isEqualTo(201);
-        long dataSourceId = extractLong(source.body(), "id");
-        ApiClient.Response registered = client.post("/api/tables", token,
+        return extractLong(source.body(), "id");
+    }
+
+    private long registerTable(long dataSourceId, String schema, String table)
+    {
+        ApiClient.Response registered = client.post("/api/tables", bearer(operator()),
                 "{\"dataSourceId\":%d,\"schema\":\"%s\",\"table\":\"%s\",\"description\":\"d\"}".formatted(dataSourceId, schema, table));
         assertThat(registered.status()).isEqualTo(201);
         return extractLong(registered.body(), "id");

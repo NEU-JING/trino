@@ -25,12 +25,11 @@ public class DatasetRepository
             + "current_version, materialization_mode, definition_json, created_at, updated_at FROM dataset";
 
     private final JdbcTemplate jdbcTemplate;
-    private final ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public DatasetRepository(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper)
+    public DatasetRepository(JdbcTemplate jdbcTemplate)
     {
         this.jdbcTemplate = jdbcTemplate;
-        this.objectMapper = objectMapper;
     }
 
     public Optional<Dataset> findById(long id)

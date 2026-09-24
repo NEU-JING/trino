@@ -87,7 +87,8 @@ class AccessControlRulesGeneratorTest
     private static JsonNode findTableRule(JsonNode root, String user)
     {
         for (JsonNode rule : root.get("tables")) {
-            if (user.equals(rule.get("user").asText())) {
+            JsonNode userNode = rule.get("user");
+            if (userNode != null && user.equals(userNode.asText())) {
                 return rule;
             }
         }
