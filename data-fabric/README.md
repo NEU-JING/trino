@@ -87,7 +87,8 @@ an `AGGREGATE` dataset, so a metrics platform can write them back without a dedi
 
 Operator management lives under `/api/datasets` (create/publish/deprecate/delete). The same compiled
 SELECT feeds both the queryable `fabric` catalog object and the model API, so structure and metadata
-cannot drift. See `docs/logical-dataset-model.md` for the full model.
+cannot drift. See `docs/logical-dataset-model.md` for the full model and `docs/access-and-usage-guide.md`
+for how operators and application products access the platform.
 
 ## Local development
 
