@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -31,9 +32,10 @@ public class QueryController
     @ResponseStatus(HttpStatus.ACCEPTED)
     public QueryExecutionView start(
             @RequestBody StartQueryRequest request,
-            @RequestAttribute(AuthInterceptor.USER_ATTRIBUTE) User user)
+            @RequestAttribute(AuthInterceptor.USER_ATTRIBUTE) User user,
+            @RequestHeader(name = "X-Data-Fabric-Application", required = false) String application)
     {
-        return queryService.start(user.username(), request.sql());
+        return queryService.start(user.username(), request.sql(), application);
     }
 
     @GetMapping("/{id}")

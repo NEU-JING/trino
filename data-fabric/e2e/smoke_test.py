@@ -562,6 +562,116 @@ def verify_dameng_federation():
     print("[dameng] cleanup OK")
 
 
+def verify_dataset_model():
+    operator_token = login("admin", "admin")
+    auth = {"Authorization": "Bearer " + operator_token}
+    disable_leftovers(operator_token, "e2e_ds_")
+    name = "e2e_ds_" + str(int(time.time()))
+    data_source_name = name + "_src"
+
+    payload = json.dumps({
+        "name": data_source_name,
+        "businessType": "达梦",
+        "host": DM_HOST,
+        "port": DM_PORT,
+        "database": "",
+        "user": "SYSDBA",
+        "password": DM_PASSWORD,
+    })
+    status, body = http("POST", BACKEND_URL + "/api/data-sources", payload, auth)
+    assert status == 201, f"register dataset source failed: {status} {body}"
+    data_source_id = json.loads(body)["id"]
+
+    status, body = http(
+        "POST",
+        BACKEND_URL + "/api/tables",
+        json.dumps({"dataSourceId": data_source_id, "schema": "demo", "table": "emp", "description": "数据集冒烟"}),
+        auth,
+    )
+    assert status == 201, f"register dataset table failed: {status} {body}"
+    table_id = json.loads(body)["id"]
+
+    base_name = name + "_base"
+    base_body = json.dumps({
+        "name": base_name,
+        "description": "base",
+        "domain": "smoke",
+        "kind": "BASE",
+        "baseTableId": table_id,
+        "fields": [
+            {"name": "id", "role": "ID"},
+            {"name": "name", "role": "DIMENSION"},
+            {"name": "salary", "role": "MEASURE", "aggregation": "SUM"},
+        ],
+    })
+    status, body = http("POST", BACKEND_URL + "/api/datasets", base_body, auth)
+    assert status == 201, f"create dataset failed: {status} {body}"
+    base_uid = json.loads(body)["uid"]
+    assert json.loads(body)["status"] == "DRAFT", body
+
+    status, body = http("POST", BACKEND_URL + f"/api/datasets/{base_uid}/publish", None, auth)
+    assert status == 200 and json.loads(body)["status"] == "PUBLISHED", f"publish failed: {status} {body}"
+    assert json.loads(body)["currentVersion"] == 1, body
+    print("[dataset] BASE dataset published")
+
+    status, body = http("GET", BACKEND_URL + "/api/model/datasets", headers=auth)
+    assert status == 200 and base_name in body, f"model listing failed: {status} {body}"
+
+    view = run_query(operator_token, f"SELECT id, name FROM fabric.smoke.{base_name} ORDER BY id")
+    assert view["state"] == "FINISHED", view
+    assert view["columns"] == ["id", "name"], view
+    print("[dataset] SQL query over fabric view OK:", view["rows"])
+
+    status, body = http(
+        "PUT", BACKEND_URL + f"/api/datasets/{base_uid}/materialization", json.dumps({"mode": "MATERIALIZED"}), auth)
+    assert status == 200, f"set materialization failed: {status} {body}"
+    status, body = http("POST", BACKEND_URL + f"/api/datasets/{base_uid}/materialization/refresh", None, auth)
+    assert status == 200, f"materialize failed: {status} {body}"
+    view = run_query(operator_token, f"SELECT count(*) FROM fabric.smoke.{base_name}")
+    assert view["state"] == "FINISHED", view
+    print("[dataset] materialized dataset query OK:", view["rows"])
+
+    metric_name = name + "_metric"
+    metric_body = json.dumps({
+        "name": metric_name,
+        "description": "metric",
+        "domain": "app",
+        "kind": "AGGREGATE",
+        "inputs": [base_uid],
+        "groupBy": ["t0.name"],
+        "measures": [{"name": "headcount", "expression": "count(*)", "aggregation": "COUNT"}],
+        "fields": [
+            {"name": "name", "role": "DIMENSION"},
+            {"name": "headcount", "role": "MEASURE", "aggregation": "COUNT"},
+        ],
+    })
+    status, body = http("POST", BACKEND_URL + "/api/model/datasets", metric_body, auth)
+    assert status == 201, f"metric write-back failed: {status} {body}"
+    metric_uid = json.loads(body)["uid"]
+    status, body = http("PUT", BACKEND_URL + f"/api/model/datasets/{metric_uid}/versions", None, auth)
+    assert status == 200 and json.loads(body)["status"] == "PUBLISHED", f"metric publish failed: {status} {body}"
+    print("[dataset] AGGREGATE metric written back and published")
+
+    viewer_token = login("viewer", "viewer")
+    viewer_auth = {"Authorization": "Bearer " + viewer_token}
+    assert http("POST", BACKEND_URL + "/api/model/datasets", metric_body, viewer_auth)[0] == 403
+    assert http("GET", BACKEND_URL + "/api/usage/datasets", headers=viewer_auth)[0] == 403
+    print("[dataset] write-back/usage authorization enforced")
+
+    status, body = http("POST", BACKEND_URL + "/api/model/relations/infer", None, auth)
+    assert status == 200, f"infer failed: {status} {body}"
+    status, body = http("GET", BACKEND_URL + f"/api/model/lineage/{base_uid}", headers=auth)
+    assert status == 200 and "table" in body, f"lineage failed: {status} {body}"
+    assert http("GET", BACKEND_URL + "/api/usage/datasets", headers=auth)[0] == 200
+    print("[dataset] relations + lineage + usage OK")
+
+    assert http("DELETE", BACKEND_URL + f"/api/datasets/{metric_uid}", None, auth)[0] == 204
+    assert http("DELETE", BACKEND_URL + f"/api/datasets/{base_uid}", None, auth)[0] == 204
+    assert http("DELETE", BACKEND_URL + f"/api/tables/{table_id}", None, auth)[0] == 204
+    assert http("DELETE", BACKEND_URL + f"/api/data-sources/{data_source_id}", None, auth)[0] == 200
+    print("[dataset] cleanup OK")
+
+
 def main():
     verify_trino_cross_source()
     verify_backend()
@@ -572,6 +682,7 @@ def main():
     verify_large_result()
     verify_query_history_and_favorites()
     verify_dameng_federation()
+    verify_dataset_model()
     print("E2E_OK")
 
 

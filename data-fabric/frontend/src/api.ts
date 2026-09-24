@@ -373,3 +373,177 @@ export async function downloadExport(queryId: string, format: "csv" | "xlsx"): P
   link.remove();
   URL.revokeObjectURL(url);
 }
+
+export interface DatasetFieldView {
+  name: string;
+  label: string;
+  dataType: string | null;
+  role: string;
+  aggregation: string | null;
+  timeGrain: string | null;
+  format: string | null;
+  unit: string | null;
+  nullable: boolean;
+}
+
+export interface DatasetMaterializationView {
+  mode: string;
+  target: string | null;
+  status: string | null;
+  message: string | null;
+  refreshedAt: string | null;
+  staleSeconds: number | null;
+}
+
+export interface DatasetView {
+  id: number;
+  uid: string;
+  name: string;
+  description: string;
+  domain: string | null;
+  owner: string;
+  kind: string;
+  status: string;
+  currentVersion: number;
+  materializationMode: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DatasetDetailView extends DatasetView {
+  fields: DatasetFieldView[];
+  materialization: DatasetMaterializationView | null;
+}
+
+export interface DatasetVersionView {
+  version: number;
+  status: string;
+  publishedAt: string | null;
+  createdAt: string;
+}
+
+export interface DatasetRelationView {
+  id: number;
+  fromDatasetUid: string;
+  fromField: string;
+  toDatasetUid: string;
+  toField: string;
+  joinType: string;
+  cardinality: string;
+  origin: string;
+}
+
+export interface RelationGraphView {
+  nodes: { uid: string; name: string; kind: string; status: string }[];
+  edges: DatasetRelationView[];
+}
+
+export interface LineageView {
+  datasetUid: string;
+  upstream: { id: string; label: string; type: string }[];
+  downstream: { id: string; label: string; type: string }[];
+}
+
+export interface DatasetUsageView {
+  datasetUid: string;
+  application: string;
+  username: string;
+  queryCount: number;
+  failureCount: number;
+  averageLatencyMs: number;
+  lastUsedAt: string | null;
+}
+
+export interface DatasetFieldRequest {
+  name: string;
+  label?: string;
+  dataType?: string;
+  role?: string;
+  aggregation?: string;
+  timeGrain?: string;
+  format?: string;
+  unit?: string;
+  nullable?: boolean;
+}
+
+export interface CreateDatasetRequest {
+  name: string;
+  description?: string;
+  domain?: string;
+  kind: string;
+  baseTableId?: number;
+  inputs?: string[];
+  joins?: { leftDatasetUid: string; leftField: string; rightDatasetUid: string; rightField: string; joinType: string; cardinality: string }[];
+  projections?: string[];
+  filters?: string[];
+  measures?: { name: string; expression: string; aggregation: string }[];
+  groupBy?: string[];
+  timeGrain?: string;
+  fields?: DatasetFieldRequest[];
+}
+
+export function listDatasets(): Promise<DatasetView[]> {
+  return request<DatasetView[]>("/api/datasets");
+}
+
+export function getDataset(uid: string): Promise<DatasetDetailView> {
+  return request<DatasetDetailView>(`/api/datasets/${encodeURIComponent(uid)}`);
+}
+
+export function listDatasetVersions(uid: string): Promise<DatasetVersionView[]> {
+  return request<DatasetVersionView[]>(`/api/datasets/${encodeURIComponent(uid)}/versions`);
+}
+
+export function createDataset(payload: CreateDatasetRequest): Promise<DatasetDetailView> {
+  return request<DatasetDetailView>("/api/datasets", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function publishDataset(uid: string): Promise<DatasetDetailView> {
+  return request<DatasetDetailView>(`/api/datasets/${encodeURIComponent(uid)}/publish`, { method: "POST" });
+}
+
+export function deprecateDataset(uid: string): Promise<DatasetDetailView> {
+  return request<DatasetDetailView>(`/api/datasets/${encodeURIComponent(uid)}/deprecate`, { method: "POST" });
+}
+
+export function setDatasetMaterialization(uid: string, mode: string): Promise<DatasetDetailView> {
+  return request<DatasetDetailView>(`/api/datasets/${encodeURIComponent(uid)}/materialization`, {
+    method: "PUT",
+    body: JSON.stringify({ mode }),
+  });
+}
+
+export function refreshDatasetMaterialization(uid: string): Promise<DatasetDetailView> {
+  return request<DatasetDetailView>(`/api/datasets/${encodeURIComponent(uid)}/materialization/refresh`, {
+    method: "POST",
+  });
+}
+
+export function listRelations(datasetUid?: string): Promise<DatasetRelationView[]> {
+  const suffix = datasetUid ? `?dataset=${encodeURIComponent(datasetUid)}` : "";
+  return request<DatasetRelationView[]>(`/api/model/relations${suffix}`);
+}
+
+export function relationGraph(): Promise<RelationGraphView> {
+  return request<RelationGraphView>("/api/model/graph");
+}
+
+export function datasetLineage(uid: string): Promise<LineageView> {
+  return request<LineageView>(`/api/model/lineage/${encodeURIComponent(uid)}`);
+}
+
+export function inferRelations(): Promise<DatasetRelationView[]> {
+  return request<DatasetRelationView[]>("/api/model/relations/infer", { method: "POST" });
+}
+
+export function confirmRelation(id: number): Promise<DatasetRelationView> {
+  return request<DatasetRelationView>(`/api/model/relations/${id}/confirm`, { method: "POST" });
+}
+
+export function listDatasetUsage(): Promise<DatasetUsageView[]> {
+  return request<DatasetUsageView[]>("/api/usage/datasets");
+}
+
+export function datasetUsage(uid: string): Promise<DatasetUsageView[]> {
+  return request<DatasetUsageView[]>(`/api/usage/datasets/${encodeURIComponent(uid)}`);
+}

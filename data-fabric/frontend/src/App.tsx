@@ -8,6 +8,7 @@ import BrandBanner from "./components/BrandBanner";
 
 const DashboardPage = lazy(() => import("./DashboardPage"));
 const DataSourcesPage = lazy(() => import("./DataSourcesPage"));
+const DatasetsPage = lazy(() => import("./DatasetsPage"));
 const PermissionsPage = lazy(() => import("./PermissionsPage"));
 const QueryPage = lazy(() => import("./QueryPage"));
 const TablesPage = lazy(() => import("./TablesPage"));
@@ -45,6 +46,7 @@ export default function App() {
         <Route index element={<DashboardPage isOperator={isOperator} />} />
         <Route path="query" element={<QueryPage />} />
         <Route path="tables" element={<TablesPage isOperator={isOperator} />} />
+        <Route path="datasets" element={<DatasetsPage isOperator={isOperator} />} />
         <Route
           path="data-sources"
           element={isOperator ? <DataSourcesPage /> : <Navigate to="/" replace />}

@@ -6,6 +6,8 @@ import io.trino.datafabric.auth.InvalidCredentialsException;
 import io.trino.datafabric.datasource.DataSourceException;
 import io.trino.datafabric.datasource.DataSourceNotFoundException;
 import io.trino.datafabric.datasource.DuplicateDataSourceException;
+import io.trino.datafabric.dataset.DatasetException;
+import io.trino.datafabric.dataset.DatasetNotFoundException;
 import io.trino.datafabric.export.ResultNotExportableException;
 import io.trino.datafabric.metadata.MetadataQueryException;
 import io.trino.datafabric.query.QueryNotFoundException;
@@ -88,6 +90,20 @@ public class ApiExceptionHandler
     @ExceptionHandler(TableNotFoundException.class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public Map<String, String> tableNotFound(TableNotFoundException exception)
+    {
+        return Map.of("error", exception.getMessage());
+    }
+
+    @ExceptionHandler(DatasetNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public Map<String, String> datasetNotFound(DatasetNotFoundException exception)
+    {
+        return Map.of("error", exception.getMessage());
+    }
+
+    @ExceptionHandler(DatasetException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public Map<String, String> dataset(DatasetException exception)
     {
         return Map.of("error", exception.getMessage());
     }

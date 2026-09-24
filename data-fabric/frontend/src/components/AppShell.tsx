@@ -2,6 +2,7 @@ import {
   ConsoleSqlOutlined,
   DashboardOutlined,
   DatabaseOutlined,
+  DeploymentUnitOutlined,
   LogoutOutlined,
   MoonOutlined,
   SafetyCertificateOutlined,
@@ -42,6 +43,7 @@ export default function AppShell({ username, role, onLogout }: Props) {
     { key: "/", icon: <DashboardOutlined />, label: "总览" },
     { key: "/query", icon: <ConsoleSqlOutlined />, label: "SQL 查询" },
     { key: "/tables", icon: <TableOutlined />, label: "表目录" },
+    { key: "/datasets", icon: <DeploymentUnitOutlined />, label: "数据集" },
     ...(isOperator
       ? [
           { key: "/data-sources", icon: <DatabaseOutlined />, label: "数据源管理" },

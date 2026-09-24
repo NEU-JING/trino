@@ -11,7 +11,7 @@ import ReactECharts from "echarts-for-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import * as api from "./api";
-import type { QueryHistoryView, OverviewStatsView, TopologyView } from "./api";
+import type { QueryHistoryView, OverviewStatsView, TopologyView, DatasetUsageView } from "./api";
 import { useThemeMode } from "./theme";
 
 const CATEGORY_INDEX: Record<string, number> = { DATA_SOURCE: 0, TABLE: 1, USER: 2, ROLE: 3 };
@@ -30,6 +30,7 @@ export default function DashboardPage({ isOperator }: { isOperator: boolean }) {
   const { mode } = useThemeMode();
   const [stats, setStats] = useState<OverviewStatsView | null>(null);
   const [topology, setTopology] = useState<TopologyView | null>(null);
+  const [datasetUsage, setDatasetUsage] = useState<DatasetUsageView[]>([]);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
@@ -37,11 +38,14 @@ export default function DashboardPage({ isOperator }: { isOperator: boolean }) {
       const [statsResult, topologyResult] = await Promise.all([api.getOverviewStats(), api.getTopology()]);
       setStats(statsResult);
       setTopology(topologyResult);
+      if (isOperator) {
+        setDatasetUsage(await api.listDatasetUsage().catch(() => []));
+      }
       setError("");
     } catch (e) {
       setError(String(e));
     }
-  }, []);
+  }, [isOperator]);
 
   useEffect(() => {
     void load();
@@ -272,6 +276,31 @@ export default function DashboardPage({ isOperator }: { isOperator: boolean }) {
           </Card>
         </Col>
       </Row>
+
+      {isOperator && (
+        <Card className="df-glass" variant="borderless" title={<span>数据集用量</span>}>
+          <Table<DatasetUsageView>
+            size="small"
+            rowKey={(record) => `${record.datasetUid}-${record.application}-${record.username}`}
+            pagination={{ pageSize: 8, hideOnSinglePage: true }}
+            columns={[
+              { title: "数据集", dataIndex: "datasetUid", ellipsis: true },
+              { title: "应用", dataIndex: "application", width: 140 },
+              { title: "用户", dataIndex: "username", width: 140 },
+              { title: "查询次数", dataIndex: "queryCount", width: 100 },
+              { title: "失败", dataIndex: "failureCount", width: 80 },
+              {
+                title: "平均延迟(ms)",
+                dataIndex: "averageLatencyMs",
+                width: 130,
+                render: (value: number) => value.toFixed(1),
+              },
+            ]}
+            dataSource={datasetUsage}
+            locale={{ emptyText: <Empty description="暂无数据集用量" /> }}
+          />
+        </Card>
+      )}
 
       <Card
         className="df-glass"

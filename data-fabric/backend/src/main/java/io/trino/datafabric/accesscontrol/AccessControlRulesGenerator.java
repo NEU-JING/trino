@@ -26,16 +26,19 @@ public class AccessControlRulesGenerator
     private final PermissionRepository permissionRepository;
     private final UserRepository userRepository;
     private final String serviceUser;
+    private final String fabricCatalog;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public AccessControlRulesGenerator(
             PermissionRepository permissionRepository,
             UserRepository userRepository,
-            @Value("${data-fabric.trino.user:trino_service}") String serviceUser)
+            @Value("${data-fabric.trino.user:trino_service}") String serviceUser,
+            @Value("${data-fabric.dataset.catalog:fabric}") String fabricCatalog)
     {
         this.permissionRepository = permissionRepository;
         this.userRepository = userRepository;
         this.serviceUser = serviceUser;
+        this.fabricCatalog = fabricCatalog;
     }
 
     public String generate()
@@ -51,6 +54,14 @@ public class AccessControlRulesGenerator
         // Table SELECT grants.
         ArrayNode tables = root.putArray("tables");
         tables.add(serviceTableRule());
+        // Published dataset views/tables live in the fabric catalog and are read-only for
+        // authenticated consumers; the view's INVOKER security still enforces source grants.
+        ObjectNode fabricRule = objectMapper.createObjectNode();
+        fabricRule.put("catalog", Pattern.quote(fabricCatalog));
+        fabricRule.put("schema", ".*");
+        fabricRule.put("table", ".*");
+        fabricRule.putArray("privileges").add("SELECT");
+        tables.add(fabricRule);
         List<User> users = userRepository.findAll();
         for (User user : users) {
             if (user.role() == Role.OPERATOR && user.enabled()) {

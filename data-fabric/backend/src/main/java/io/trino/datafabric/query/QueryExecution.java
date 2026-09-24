@@ -11,6 +11,7 @@ public class QueryExecution
     private final String queryId;
     private final String owner;
     private final String sql;
+    private final String application;
     private final Instant startedAt = Instant.now();
 
     private QueryState state = QueryState.RUNNING;
@@ -22,9 +23,15 @@ public class QueryExecution
 
     public QueryExecution(String queryId, String owner, String sql)
     {
+        this(queryId, owner, sql, "workbench");
+    }
+
+    public QueryExecution(String queryId, String owner, String sql, String application)
+    {
         this.queryId = queryId;
         this.owner = owner;
         this.sql = sql;
+        this.application = application == null || application.isBlank() ? "workbench" : application;
     }
 
     public String queryId()
@@ -40,6 +47,11 @@ public class QueryExecution
     public String sql()
     {
         return sql;
+    }
+
+    public String application()
+    {
+        return application;
     }
 
     public Instant startedAt()

@@ -2,6 +2,10 @@ package io.trino.datafabric.metadata;
 
 import io.trino.datafabric.datasource.DataSource;
 import io.trino.datafabric.datasource.DataSourceRepository;
+import io.trino.datafabric.dataset.DatasetRelationService;
+import io.trino.datafabric.dataset.DatasetRelationView;
+import io.trino.datafabric.dataset.DatasetService;
+import io.trino.datafabric.dataset.DatasetView;
 import io.trino.datafabric.permission.PermissionService;
 import io.trino.datafabric.security.Role;
 import io.trino.datafabric.table.RegisteredTable;
@@ -48,6 +52,8 @@ public class MetadataService
     private final DataSourceRepository dataSourceRepository;
     private final PermissionService permissionService;
     private final TrinoGateway trinoGateway;
+    private final DatasetService datasetService;
+    private final DatasetRelationService relationService;
     private final Duration sampleTimeout;
     private final Duration cacheTtl;
     private final ExecutorService sampleExecutor;
@@ -58,6 +64,8 @@ public class MetadataService
             DataSourceRepository dataSourceRepository,
             PermissionService permissionService,
             TrinoGateway trinoGateway,
+            DatasetService datasetService,
+            DatasetRelationService relationService,
             @Value("${data-fabric.metadata.sample-timeout:10s}") Duration sampleTimeout,
             @Value("${data-fabric.metadata.sample-cache-ttl:30s}") Duration cacheTtl)
     {
@@ -65,6 +73,8 @@ public class MetadataService
         this.dataSourceRepository = dataSourceRepository;
         this.permissionService = permissionService;
         this.trinoGateway = trinoGateway;
+        this.datasetService = datasetService;
+        this.relationService = relationService;
         this.sampleTimeout = sampleTimeout;
         this.cacheTtl = cacheTtl;
         this.sampleExecutor = Executors.newCachedThreadPool(runnable -> {
@@ -90,6 +100,8 @@ public class MetadataService
                 String[] parts = requireParent(parent, 3);
                 yield columnNames(user, parts[0], parts[1], parts[2]);
             }
+            case "dataset" -> datasetNames();
+            case "relation" -> relationCandidates(parent);
             default -> throw new IllegalArgumentException("Unknown suggestion type: " + type);
         };
         return toSuggestions(names, query);
@@ -149,6 +161,29 @@ public class MetadataService
                 table.registeredBy(),
                 rowCount(table),
                 principals);
+    }
+
+    private List<String> datasetNames()
+    {
+        return datasetService.listConsumable().stream()
+                .map(DatasetView::name)
+                .sorted()
+                .toList();
+    }
+
+    private List<String> relationCandidates(String parent)
+    {
+        if (parent == null || parent.isBlank()) {
+            throw new IllegalArgumentException("parent must be a dataset uid");
+        }
+        List<String> candidates = new ArrayList<>();
+        for (DatasetRelationView relation : relationService.forDataset(parent)) {
+            boolean outgoing = relation.fromDatasetUid().equals(parent);
+            String otherUid = outgoing ? relation.toDatasetUid() : relation.fromDatasetUid();
+            String otherField = outgoing ? relation.toField() : relation.fromField();
+            candidates.add(datasetService.requireByUid(otherUid).name() + "." + otherField);
+        }
+        return candidates;
     }
 
     private List<String> catalogNames(User user)

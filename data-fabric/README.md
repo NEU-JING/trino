@@ -56,6 +56,39 @@ Backend packages: `security`, `user`, `auth`, `datasource`, `table`, `permission
 Roles: `OPERATOR` (manage sources/tables/grants, see everything) and `QUERY_USER` (browse and
 query granted tables only).
 
+## Logical dataset model (semantic substrate)
+
+Beyond registered tables, the platform exposes **logical datasets** as the single unit consumed by
+downstream data application products and a future metrics platform. Datasets carry structure,
+relationships, field semantics, versions, materialization and governance. Metrics are expressed as
+an `AGGREGATE` dataset, so a metrics platform can write them back without a dedicated channel.
+
+- **Kinds**: `BASE` (registered table passthrough), `DERIVED` (join/projection/filter over other
+  datasets), `AGGREGATE` (measures + dimensions + optional time grain).
+- **Field semantic roles**: `id`, `dimension`, `measure`, `time`, `geo`, `computed`, with default
+  aggregation and time grain.
+- **Relations**: directed join edges (declared or inferred), reused across datasets; plus a relation
+  graph and lineage.
+- **Versions**: a stable `uid` never changes; publishing creates an immutable version
+  (`DRAFT → PUBLISHED → DEPRECATED`).
+- **Materialization**: `virtual` (a Trino view) or `materialized` (CTAS table); manual refresh first,
+  observation-driven automation later.
+
+### Serving contract
+
+| Concern | Endpoint |
+|---|---|
+| Read the model | `GET /api/model/datasets`, `/datasets/{uid}`, `/datasets/{uid}/versions` |
+| Relations / graph / lineage | `GET /api/model/relations`, `/graph`, `/lineage/{uid}` |
+| Metric write-back | `POST /api/model/datasets` (kind=AGGREGATE), `PUT /api/model/datasets/{uid}/versions` |
+| Query (SQL first) | datasets compile to `fabric.<domain>.<name>` views; query via the SQL workbench/API |
+| Materialization | `PUT /api/datasets/{uid}/materialization`, `POST .../materialization/refresh` |
+| Usage observability | `GET /api/usage/datasets`, `/datasets/{uid}` |
+
+Operator management lives under `/api/datasets` (create/publish/deprecate/delete). The same compiled
+SELECT feeds both the queryable `fabric` catalog object and the model API, so structure and metadata
+cannot drift. See `docs/logical-dataset-model.md` for the full model.
+
 ## Local development
 
 Requirements: JDK 25, Maven (or use the Maven Docker image), Node/Bun for the frontend.

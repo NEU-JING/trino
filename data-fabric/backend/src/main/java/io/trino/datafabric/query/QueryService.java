@@ -1,12 +1,17 @@
 package io.trino.datafabric.query;
 
+import io.trino.datafabric.dataset.DatasetService;
+import io.trino.datafabric.dataset.DatasetUsageService;
+import io.trino.datafabric.dataset.DatasetView;
 import jakarta.annotation.PreDestroy;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -21,6 +26,8 @@ public class QueryService
 {
     private final QueryEngine engine;
     private final QueryHistoryRepository historyRepository;
+    private final DatasetService datasetService;
+    private final DatasetUsageService usageService;
     private final ExecutorService executor;
     private final ScheduledExecutorService scheduler;
     private final Map<String, QueryExecution> executions = new ConcurrentHashMap<>();
@@ -32,6 +39,8 @@ public class QueryService
     public QueryService(
             QueryEngine engine,
             QueryHistoryRepository historyRepository,
+            DatasetService datasetService,
+            DatasetUsageService usageService,
             @Value("${data-fabric.query.max-rows:10000}") int maxRows,
             @Value("${data-fabric.query.timeout:30s}") Duration timeout,
             @Value("${data-fabric.query.threads:4}") int threads,
@@ -39,6 +48,8 @@ public class QueryService
     {
         this.engine = engine;
         this.historyRepository = historyRepository;
+        this.datasetService = datasetService;
+        this.usageService = usageService;
         this.maxRows = maxRows;
         this.timeout = timeout;
         this.historyLimit = historyLimit;
@@ -48,11 +59,16 @@ public class QueryService
 
     public QueryExecutionView start(String user, String sql)
     {
+        return start(user, sql, "workbench");
+    }
+
+    public QueryExecutionView start(String user, String sql, String application)
+    {
         if (sql == null || sql.isBlank()) {
             throw new IllegalArgumentException("sql is required");
         }
         String queryId = UUID.randomUUID().toString();
-        QueryExecution execution = new QueryExecution(queryId, user, sql);
+        QueryExecution execution = new QueryExecution(queryId, user, sql, application);
         executions.put(queryId, execution);
         historyRepository.started(queryId, user, sql, execution.startedAt());
         executor.submit(() -> run(execution));
@@ -98,6 +114,21 @@ public class QueryService
                 view.truncated(),
                 view.error());
         historyRepository.trim(execution.owner(), historyLimit);
+        recordDatasetUsage(execution);
+    }
+
+    private void recordDatasetUsage(QueryExecution execution)
+    {
+        QueryExecutionView view = execution.view();
+        boolean failed = !QueryState.FINISHED.name().equals(view.state());
+        Instant end = view.finishedAt() == null ? Instant.now() : view.finishedAt();
+        long latencyMs = Duration.between(view.startedAt(), end).toMillis();
+        String sql = execution.sql() == null ? "" : execution.sql().toLowerCase(Locale.ROOT);
+        for (DatasetView dataset : datasetService.listConsumable()) {
+            if (sql.contains(dataset.name().toLowerCase(Locale.ROOT))) {
+                usageService.record(dataset.uid(), execution.application(), execution.owner(), latencyMs, failed);
+            }
+        }
     }
 
     public QueryExecutionView get(String user, String queryId)
